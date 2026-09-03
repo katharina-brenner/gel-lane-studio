@@ -6,7 +6,7 @@ const manrope = Manrope({ variable: '--font-manrope', subsets: ['latin'] });
 const dmMono = DM_Mono({ variable: '--font-dm-mono', subsets: ['latin'], weight: ['400', '500'] });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://lane-studio-kjb.katharina-brenner1.chatgpt.site'),
+  metadataBase: new URL('https://lane-studio.katharinabrenner.com'),
   title: 'Lane Studio',
   description: 'Mark, label, format, export.',
   openGraph: {
