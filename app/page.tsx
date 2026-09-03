@@ -12,7 +12,6 @@ import {
   Plus,
   RotateCcw,
   SlidersHorizontal,
-  Sparkles,
   Trash2,
   Upload,
 } from 'lucide-react';
@@ -144,7 +143,7 @@ export default function Home() {
   const [imageSize, setImageSize] = useState({ width: 1200, height: 720 });
   const [projectName, setProjectName] = useState('Demo gel');
   const [laneCount, setLaneCount] = useState(9);
-  const [status, setStatus] = useState('Demo ready');
+  const [status, setStatus] = useState('Demo');
 
   const selectedLane = useMemo(() => lanes.find((lane) => lane.id === selectedId) ?? null, [lanes, selectedId]);
 
@@ -182,7 +181,7 @@ export default function Home() {
     setLanes(freshLanes);
     setSelectedId(freshLanes[0].id);
     setLaneCount(safeCount);
-    setStatus(`${safeCount} lanes created`);
+    setStatus(`${safeCount} lanes`);
   }
 
   function addLane() {
@@ -206,7 +205,7 @@ export default function Home() {
     setLanes((current) => [...current, lane]);
     setSelectedId(lane.id);
     setLaneCount(lanes.length + 1);
-    setStatus('Lane added');
+    setStatus('Added');
   }
 
   function deleteLane(id = selectedId) {
@@ -216,7 +215,7 @@ export default function Home() {
       setLaneCount(next.length || 1);
       return next;
     });
-    setStatus('Lane removed');
+    setStatus('Removed');
   }
 
   function distributeLanes() {
@@ -227,14 +226,14 @@ export default function Home() {
     const spacing = (end - start) / (sorted.length - 1);
     const positions = new Map(sorted.map((lane, index) => [lane.id, clamp(start + index * spacing - lane.width / 2, 0, 100 - lane.width)]));
     setLanes((current) => current.map((lane) => ({ ...lane, left: positions.get(lane.id) ?? lane.left })));
-    setStatus('Lanes distributed evenly');
+    setStatus('Distributed');
   }
 
   function equalizeWidths() {
     if (!lanes.length) return;
     const width = lanes.reduce((sum, lane) => sum + lane.width, 0) / lanes.length;
     setLanes((current) => current.map((lane) => ({ ...lane, width: Math.min(width, 100 - lane.left) })));
-    setStatus('Lane widths matched');
+    setStatus('Widths matched');
   }
 
   function resetDemo() {
@@ -246,13 +245,13 @@ export default function Home() {
     setLanes(INITIAL_LANES);
     setSelectedId(7);
     setLaneCount(9);
-    setStatus('Demo restored');
+    setStatus('Demo');
   }
 
   function handleUpload(file?: File) {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setStatus('Please choose an image file');
+      setStatus('Choose an image');
       return;
     }
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
@@ -260,7 +259,7 @@ export default function Home() {
     objectUrlRef.current = url;
     setImageUrl(url);
     setProjectName(file.name.replace(/\.[^.]+$/, ''));
-    setStatus('Image loaded — adjust the lanes');
+    setStatus('Image loaded');
   }
 
   function startDrag(event: React.PointerEvent<HTMLDivElement>, lane: Lane) {
@@ -292,7 +291,7 @@ export default function Home() {
     if (dragRef.current) {
       event.currentTarget.releasePointerCapture(event.pointerId);
       dragRef.current = null;
-      setStatus('Lane position updated');
+      setStatus('Moved');
     }
   }
 
@@ -312,7 +311,7 @@ export default function Home() {
     if (!selectedLane) return;
     const { color, labelColor, fontSize, fontFamily, bold, italic, rotation, labelPosition } = selectedLane;
     setLanes((current) => current.map((lane) => ({ ...lane, color, labelColor, fontSize, fontFamily, bold, italic, rotation, labelPosition })));
-    setStatus('Style applied to every lane');
+    setStatus('Style applied');
   }
 
   function exportPng() {
@@ -370,7 +369,7 @@ export default function Home() {
       link.download = `${projectName || 'gel'}-annotated.png`;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-      setStatus('Annotated PNG exported');
+      setStatus('PNG exported');
     }, 'image/png');
   }
 
@@ -381,21 +380,18 @@ export default function Home() {
       <header className="topbar">
         <div className="brand-lockup">
           <span className="brand-mark" aria-hidden="true"><span /><span /><span /></span>
-          <div>
-            <p className="brand-name">Lane Studio</p>
-            <p className="brand-subtitle">Gel annotation workspace</p>
-          </div>
+          <p className="brand-name">Lane Studio</p>
         </div>
 
         <div className="toolbar" aria-label="Canvas controls">
           <label className="upload-button">
             <Upload className="size-4" />
-            <span>Upload image</span>
+            <span>Upload</span>
             <input className="sr-only" type="file" accept="image/*" onChange={(event) => handleUpload(event.target.files?.[0])} />
           </label>
-          <Button variant="outline" className="toolbar-button" onClick={addLane}><Plus /> Add lane</Button>
+          <Button variant="outline" className="toolbar-button" onClick={addLane}><Plus /> Add</Button>
           <Button variant="outline" className="toolbar-button optional-control" onClick={distributeLanes} disabled={lanes.length < 2}><AlignHorizontalDistributeCenter /> Distribute</Button>
-          <Button className="toolbar-button export-button" onClick={exportPng}><Download /> Export PNG</Button>
+          <Button className="toolbar-button export-button" onClick={exportPng}><Download /> Export</Button>
         </div>
       </header>
 
@@ -407,23 +403,22 @@ export default function Home() {
               <h1 title={projectName}>{projectName}</h1>
               <span className="lane-count">{lanes.length}</span>
             </div>
-            <p>Images stay in your browser and are not uploaded.</p>
           </div>
 
           <div className="grid-builder">
-            <label htmlFor="lane-count">Create lane grid</label>
+            <label htmlFor="lane-count">Lane grid</label>
             <div>
               <Input id="lane-count" type="number" min={1} max={30} value={laneCount} onChange={(event) => setLaneCount(clamp(Number(event.target.value), 1, 30))} />
-              <Button onClick={() => createLaneGrid()}><Sparkles /> Create</Button>
+              <Button onClick={() => createLaneGrid()}>Set</Button>
             </div>
           </div>
 
           <div className="panel-action-row">
-            <Button variant="outline" size="sm" onClick={distributeLanes} disabled={lanes.length < 2}><AlignHorizontalDistributeCenter /> Distribute</Button>
-            <Button variant="outline" size="sm" onClick={equalizeWidths} disabled={!lanes.length}><Equal /> Equal width</Button>
+            <Button variant="outline" size="sm" onClick={distributeLanes} disabled={lanes.length < 2}><AlignHorizontalDistributeCenter /> Space</Button>
+            <Button variant="outline" size="sm" onClick={equalizeWidths} disabled={!lanes.length}><Equal /> Same width</Button>
           </div>
 
-          <div className="lane-list-heading"><span>Lanes</span><span>{lanes.length} total</span></div>
+          <div className="lane-list-heading"><span>Lanes</span><span>{lanes.length}</span></div>
           <div className="lane-list" role="listbox" aria-label="Lanes">
             {lanes.map((lane, index) => (
               <button
@@ -440,10 +435,10 @@ export default function Home() {
                 <span className="lane-row-label">{lane.label || `Lane ${index + 1}`}</span>
               </button>
             ))}
-            {!lanes.length && <div className="empty-lanes"><ImagePlus /><p>No lanes yet</p><Button size="sm" onClick={addLane}>Add first lane</Button></div>}
+            {!lanes.length && <div className="empty-lanes"><ImagePlus /><p>No lanes</p><Button size="sm" onClick={addLane}>Add</Button></div>}
           </div>
 
-          <Button variant="ghost" className="reset-button" onClick={resetDemo}><RotateCcw /> Reset demo</Button>
+          <Button variant="ghost" className="reset-button" onClick={resetDemo}><RotateCcw /> Reset</Button>
         </aside>
 
         <section className="canvas-panel" aria-label="Gel annotation canvas">
@@ -500,11 +495,11 @@ export default function Home() {
               ))}
             </div>
           </div>
-          <div className="canvas-help"><span>Drag to move</span><span>Use side handles to resize</span><span>Arrow keys nudge</span></div>
+          <div className="canvas-help"><span>Drag</span><span>Handles: resize</span><span>← →: nudge</span></div>
         </section>
 
         <aside className="inspector-panel">
-          <div className="inspector-heading"><SlidersHorizontal /><div><p className="panel-kicker">Selected lane</p><h2>{selectedLane?.label || 'No lane selected'}</h2></div></div>
+          <div className="inspector-heading"><SlidersHorizontal /><div><p className="panel-kicker">Lane</p><h2>{selectedLane?.label || 'None'}</h2></div></div>
 
           {selectedLane ? (
             <div className="inspector-fields">
@@ -514,9 +509,9 @@ export default function Home() {
               </div>
 
               <div className="field-group">
-                <label htmlFor="label-preset">Quick name</label>
+                <label htmlFor="label-preset">Preset</label>
                 <NativeSelect id="label-preset" className="w-full" value="" onChange={(event) => event.target.value && updateLane(selectedLane.id, { label: event.target.value })}>
-                  <NativeSelectOption value="">Choose a preset…</NativeSelectOption>
+                  <NativeSelectOption value="">Select…</NativeSelectOption>
                   <NativeSelectOption value="Marker">Marker</NativeSelectOption>
                   <NativeSelectOption value="Control">Control</NativeSelectOption>
                   <NativeSelectOption value="Blank">Blank</NativeSelectOption>
@@ -583,16 +578,11 @@ export default function Home() {
                 </label>
               </div>
 
-              <Button variant="secondary" className="w-full" onClick={applyStyleToAll}>Apply style to all lanes</Button>
-              <Button variant="destructive" className="w-full" onClick={() => deleteLane()}><Trash2 /> Delete selected lane</Button>
-
-              <div className="privacy-note">
-                <span className="privacy-icon">✓</span>
-                <p><strong>Local by design.</strong> Your image is processed only in this browser.</p>
-              </div>
+              <Button variant="secondary" className="w-full" onClick={applyStyleToAll}>Apply to all</Button>
+              <Button variant="destructive" className="w-full" onClick={() => deleteLane()}><Trash2 /> Delete lane</Button>
             </div>
           ) : (
-            <div className="empty-inspector"><Plus /><p>Add or select a lane to edit its label.</p><Button onClick={addLane}>Add lane</Button></div>
+            <div className="empty-inspector"><Plus /><p>Select a lane.</p><Button onClick={addLane}>Add</Button></div>
           )}
         </aside>
       </section>
