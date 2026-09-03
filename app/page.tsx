@@ -6,6 +6,7 @@ import {
   Bold,
   Download,
   Equal,
+  FlaskConical,
   GripVertical,
   ImagePlus,
   Italic,
@@ -545,7 +546,9 @@ export default function Home() {
     <main className="app-shell min-h-screen bg-background text-foreground">
       <header className="topbar">
         <div className="brand-lockup">
-          <span className="brand-mark" aria-hidden="true"><span /><span /><span /></span>
+          <span className="brand-mark" aria-hidden="true">
+            <FlaskConical />
+          </span>
           <p className="brand-name"><span>Lane</span><span>Studio</span></p>
         </div>
 

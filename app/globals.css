@@ -76,32 +76,17 @@ button { cursor: pointer; }
 }
 .brand-lockup { display: flex; min-width: 200px; align-items: center; gap: 12px; }
 .brand-mark {
-  position: relative;
-  display: block;
+  display: grid;
   width: 40px;
   height: 40px;
   flex: 0 0 auto;
-  overflow: hidden;
-  border: 1px solid rgba(255,255,255,.12);
-  border-radius: 7px;
+  place-items: center;
+  border: 1px solid #173e5b;
+  border-radius: 6px;
   background: #0a2942;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 4px 10px rgba(16,35,51,.16);
+  box-shadow: 0 3px 8px rgba(16,35,51,.14);
 }
-.brand-mark::before {
-  position: absolute;
-  inset: 7px;
-  border: 1px solid rgba(255,255,255,.28);
-  border-radius: 5px;
-  background: linear-gradient(90deg,
-    transparent 31%, rgba(255,255,255,.18) 31%, rgba(255,255,255,.18) 34%,
-    transparent 34%, transparent 65%, rgba(255,255,255,.18) 65%, rgba(255,255,255,.18) 68%,
-    transparent 68%);
-  content: '';
-}
-.brand-mark span { position: absolute; z-index: 1; height: 2px; border-radius: 99px; background: #f7f8fb; box-shadow: 0 0 7px rgba(255,255,255,.22); }
-.brand-mark span:nth-child(1) { top: 12px; left: 10px; width: 11px; opacity: .9; }
-.brand-mark span:nth-child(2) { top: 19px; right: 9px; width: 16px; height: 3px; background: #62b6d8; box-shadow: 0 0 8px rgba(98,182,216,.3); }
-.brand-mark span:nth-child(3) { top: 28px; left: 13px; width: 18px; background: #a7c9db; box-shadow: 0 0 7px rgba(167,201,219,.24); }
+.brand-mark svg { width: 23px; height: 23px; color: #78c7e4; stroke-width: 1.8; }
 .brand-name { display: flex; align-items: baseline; gap: 5px; margin: 0; font-size: 15px; letter-spacing: -.035em; }
 .brand-name span:first-child { font-weight: 850; }
 .brand-name span:last-child { color: #586579; font-weight: 560; }
