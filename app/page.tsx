@@ -12,6 +12,7 @@ import {
   Italic,
   Plus,
   RotateCcw,
+  ScanLine,
   SlidersHorizontal,
   Trash2,
   Upload,
@@ -280,6 +281,27 @@ export default function Home() {
       return { ...lane, width: nextWidth, labelX: clamp(lane.labelX + (nextWidth - lane.width) / 2, -20, 120) };
     }));
     setStatus('Widths matched');
+  }
+
+  function fitLaneGrid() {
+    if (!lanes.length) return;
+    const sorted = [...lanes].sort((a, b) => a.left - b.left);
+    const margin = 4;
+    const gap = sorted.length > 1 ? Math.min(1.3, 12 / sorted.length) : 0;
+    const width = (100 - margin * 2 - gap * (sorted.length - 1)) / sorted.length;
+    const positions = new Map(sorted.map((lane, index) => [lane.id, margin + index * (width + gap)]));
+
+    setLanes((current) => current.map((lane) => {
+      const left = positions.get(lane.id) ?? lane.left;
+      const labelOffset = lane.labelX - (lane.left + lane.width / 2);
+      return {
+        ...lane,
+        left,
+        width,
+        labelX: clamp(left + width / 2 + labelOffset, -20, 120),
+      };
+    }));
+    setStatus('Lanes fitted');
   }
 
   function resetDemo() {
@@ -592,6 +614,7 @@ export default function Home() {
           <div className="panel-action-row">
             <Button variant="outline" size="sm" onClick={distributeLanes} disabled={lanes.length < 2}><AlignHorizontalDistributeCenter /> Space</Button>
             <Button variant="outline" size="sm" onClick={equalizeWidths} disabled={!lanes.length}><Equal /> Same width</Button>
+            <Button variant="outline" size="sm" className="auto-fit-button" onClick={fitLaneGrid} disabled={!lanes.length}><ScanLine /> Auto fit boxes</Button>
           </div>
 
           <div className="lane-list-heading"><span>Lanes</span><span>{lanes.length}</span></div>
