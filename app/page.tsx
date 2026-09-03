@@ -380,7 +380,7 @@ export default function Home() {
       <header className="topbar">
         <div className="brand-lockup">
           <span className="brand-mark" aria-hidden="true"><span /><span /><span /></span>
-          <p className="brand-name">Lane Studio</p>
+          <p className="brand-name"><span>Lane</span><span>Studio</span></p>
         </div>
 
         <div className="toolbar" aria-label="Canvas controls">
