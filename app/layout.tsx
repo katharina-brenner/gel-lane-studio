@@ -8,16 +8,16 @@ const dmMono = DM_Mono({ variable: '--font-dm-mono', subsets: ['latin'], weight:
 export const metadata: Metadata = {
   metadataBase: new URL('https://lane-studio.katharinabrenner.com'),
   title: 'Lane Studio',
-  description: 'Mark, label, format, export.',
+  description: 'Mark, position, format, export.',
   openGraph: {
     title: 'Lane Studio',
-    description: 'Mark, label, format, export.',
+    description: 'Mark, position, format, export.',
     images: [{ url: '/og.png', width: 1536, height: 1024, alt: 'Lane Studio gel annotation workspace' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Lane Studio',
-    description: 'Mark, label, format, export.',
+    description: 'Mark, position, format, export.',
     images: ['/og.png'],
   },
 };

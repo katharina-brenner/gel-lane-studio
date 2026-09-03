@@ -23,6 +23,7 @@ import { Slider } from '@/components/ui/slider';
 import { Toggle } from '@/components/ui/toggle';
 
 type LabelPosition = 'top' | 'inside' | 'bottom';
+type ExportFormat = 'png' | 'jpeg' | 'svg';
 
 type Lane = {
   id: number;
@@ -37,6 +38,8 @@ type Lane = {
   italic: boolean;
   rotation: number;
   labelPosition: LabelPosition;
+  labelX: number;
+  labelY: number;
 };
 
 type DragState = {
@@ -45,23 +48,40 @@ type DragState = {
   startX: number;
   startLeft: number;
   startWidth: number;
+  startLabelX: number;
   stageWidth: number;
 };
 
+type LabelDragState = {
+  id: number;
+  startX: number;
+  startY: number;
+  startLabelX: number;
+  startLabelY: number;
+  stageWidth: number;
+  stageHeight: number;
+};
+
+const LABEL_Y: Record<LabelPosition, number> = {
+  top: -7,
+  inside: 6,
+  bottom: 107,
+};
+
 const INITIAL_LANES: Lane[] = [
-  { id: 1, left: 5, width: 8.8, label: 'Marker', color: '#2856f6', labelColor: '#173fc5', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top' },
-  { id: 2, left: 15, width: 8.8, label: 'Control', color: '#2856f6', labelColor: '#173fc5', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top' },
-  { id: 3, left: 25, width: 8.8, label: 'Sample A', color: '#2856f6', labelColor: '#173fc5', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top' },
-  { id: 4, left: 35, width: 8.8, label: 'Sample B', color: '#2856f6', labelColor: '#173fc5', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top' },
-  { id: 5, left: 45, width: 8.8, label: 'Sample C', color: '#2856f6', labelColor: '#173fc5', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top' },
-  { id: 6, left: 55, width: 8.8, label: 'Treatment 1', color: '#2856f6', labelColor: '#173fc5', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top' },
-  { id: 7, left: 65, width: 8.8, label: 'Treatment 2', color: '#f4542f', labelColor: '#d33b20', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top' },
-  { id: 8, left: 75, width: 8.8, label: 'Treatment 3', color: '#2856f6', labelColor: '#173fc5', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top' },
-  { id: 9, left: 85, width: 8.8, label: 'Treatment 4', color: '#2856f6', labelColor: '#173fc5', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top' },
+  { id: 1, left: 5, width: 8.8, label: 'Marker', color: '#0b5fa5', labelColor: '#063f73', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 9.4, labelY: -7 },
+  { id: 2, left: 15, width: 8.8, label: 'Control', color: '#0b5fa5', labelColor: '#063f73', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 19.4, labelY: -7 },
+  { id: 3, left: 25, width: 8.8, label: 'Sample A', color: '#0b5fa5', labelColor: '#063f73', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 29.4, labelY: -7 },
+  { id: 4, left: 35, width: 8.8, label: 'Sample B', color: '#0b5fa5', labelColor: '#063f73', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 39.4, labelY: -7 },
+  { id: 5, left: 45, width: 8.8, label: 'Sample C', color: '#0b5fa5', labelColor: '#063f73', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 49.4, labelY: -7 },
+  { id: 6, left: 55, width: 8.8, label: 'Treatment 1', color: '#0b5fa5', labelColor: '#063f73', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 59.4, labelY: -7 },
+  { id: 7, left: 65, width: 8.8, label: 'Treatment 2', color: '#bb2d3b', labelColor: '#9d1f2d', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 69.4, labelY: -7 },
+  { id: 8, left: 75, width: 8.8, label: 'Treatment 3', color: '#0b5fa5', labelColor: '#063f73', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 79.4, labelY: -7 },
+  { id: 9, left: 85, width: 8.8, label: 'Treatment 4', color: '#0b5fa5', labelColor: '#063f73', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 89.4, labelY: -7 },
 ];
 
 const FONT_STACKS: Record<string, string> = {
-  Manrope: 'var(--font-manrope), Arial, sans-serif',
+  Manrope: 'Manrope, Arial, sans-serif',
   Arial: 'Arial, sans-serif',
   Georgia: 'Georgia, serif',
   'Times New Roman': '"Times New Roman", serif',
@@ -79,6 +99,16 @@ function alpha(hex: string, opacity: number) {
   const green = (value >> 8) & 255;
   const blue = value & 255;
   return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
+}
+
+function escapeXml(value: string) {
+  return value.replace(/[<>&'\"]/g, (character) => ({
+    '<': '&lt;',
+    '>': '&gt;',
+    '&': '&amp;',
+    "'": '&apos;',
+    '"': '&quot;',
+  }[character] ?? character));
 }
 
 function drawDemoGel(canvas: HTMLCanvasElement) {
@@ -134,6 +164,7 @@ export default function Home() {
   const uploadedImageRef = useRef<HTMLImageElement>(null);
   const gelMediaRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
+  const labelDragRef = useRef<LabelDragState | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const nextIdRef = useRef(10);
 
@@ -144,6 +175,7 @@ export default function Home() {
   const [projectName, setProjectName] = useState('Demo gel');
   const [laneCount, setLaneCount] = useState(9);
   const [status, setStatus] = useState('Demo');
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('png');
 
   const selectedLane = useMemo(() => lanes.find((lane) => lane.id === selectedId) ?? null, [lanes, selectedId]);
 
@@ -164,20 +196,25 @@ export default function Home() {
     const margin = 4;
     const gap = safeCount > 1 ? Math.min(1.3, 12 / safeCount) : 0;
     const width = (100 - margin * 2 - gap * (safeCount - 1)) / safeCount;
-    const freshLanes = Array.from({ length: safeCount }, (_, index): Lane => ({
-      id: nextIdRef.current++,
-      label: index === 0 ? 'Marker' : `Lane ${index + 1}`,
-      left: margin + index * (width + gap),
-      width,
-      color: '#2856f6',
-      labelColor: '#173fc5',
-      fontSize: 17,
-      fontFamily: 'Manrope',
-      bold: true,
-      italic: false,
-      rotation: safeCount > 7 ? -45 : 0,
-      labelPosition: 'top',
-    }));
+    const freshLanes = Array.from({ length: safeCount }, (_, index): Lane => {
+      const left = margin + index * (width + gap);
+      return {
+        id: nextIdRef.current++,
+        label: index === 0 ? 'Marker' : `Lane ${index + 1}`,
+        left,
+        width,
+        color: '#0b5fa5',
+        labelColor: '#063f73',
+        fontSize: 17,
+        fontFamily: 'Manrope',
+        bold: true,
+        italic: false,
+        rotation: safeCount > 7 ? -45 : 0,
+        labelPosition: 'top',
+        labelX: left + width / 2,
+        labelY: LABEL_Y.top,
+      };
+    });
     setLanes(freshLanes);
     setSelectedId(freshLanes[0].id);
     setLaneCount(safeCount);
@@ -193,14 +230,16 @@ export default function Home() {
       label: `Lane ${lanes.length + 1}`,
       left,
       width,
-      color: selectedLane?.color ?? '#2856f6',
-      labelColor: selectedLane?.labelColor ?? '#173fc5',
+      color: selectedLane?.color ?? '#0b5fa5',
+      labelColor: selectedLane?.labelColor ?? '#063f73',
       fontSize: selectedLane?.fontSize ?? 17,
       fontFamily: selectedLane?.fontFamily ?? 'Manrope',
       bold: selectedLane?.bold ?? true,
       italic: selectedLane?.italic ?? false,
       rotation: selectedLane?.rotation ?? 0,
       labelPosition: selectedLane?.labelPosition ?? 'top',
+      labelX: left + width / 2,
+      labelY: LABEL_Y[selectedLane?.labelPosition ?? 'top'],
     };
     setLanes((current) => [...current, lane]);
     setSelectedId(lane.id);
@@ -225,14 +264,20 @@ export default function Home() {
     const end = sorted.at(-1)!.left + sorted.at(-1)!.width / 2;
     const spacing = (end - start) / (sorted.length - 1);
     const positions = new Map(sorted.map((lane, index) => [lane.id, clamp(start + index * spacing - lane.width / 2, 0, 100 - lane.width)]));
-    setLanes((current) => current.map((lane) => ({ ...lane, left: positions.get(lane.id) ?? lane.left })));
+    setLanes((current) => current.map((lane) => {
+      const left = positions.get(lane.id) ?? lane.left;
+      return { ...lane, left, labelX: clamp(lane.labelX + left - lane.left, -20, 120) };
+    }));
     setStatus('Distributed');
   }
 
   function equalizeWidths() {
     if (!lanes.length) return;
     const width = lanes.reduce((sum, lane) => sum + lane.width, 0) / lanes.length;
-    setLanes((current) => current.map((lane) => ({ ...lane, width: Math.min(width, 100 - lane.left) })));
+    setLanes((current) => current.map((lane) => {
+      const nextWidth = Math.min(width, 100 - lane.left);
+      return { ...lane, width: nextWidth, labelX: clamp(lane.labelX + (nextWidth - lane.width) / 2, -20, 120) };
+    }));
     setStatus('Widths matched');
   }
 
@@ -270,7 +315,7 @@ export default function Home() {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     setSelectedId(lane.id);
-    dragRef.current = { id: lane.id, mode, startX: event.clientX, startLeft: lane.left, startWidth: lane.width, stageWidth: bounds.width };
+    dragRef.current = { id: lane.id, mode, startX: event.clientX, startLeft: lane.left, startWidth: lane.width, startLabelX: lane.labelX, stageWidth: bounds.width };
   }
 
   function moveDrag(event: React.PointerEvent<HTMLDivElement>) {
@@ -278,12 +323,16 @@ export default function Home() {
     if (!drag || drag.id !== Number(event.currentTarget.dataset.laneId)) return;
     const delta = ((event.clientX - drag.startX) / drag.stageWidth) * 100;
     if (drag.mode === 'move') {
-      updateLane(drag.id, { left: clamp(drag.startLeft + delta, 0, 100 - drag.startWidth) });
+      const left = clamp(drag.startLeft + delta, 0, 100 - drag.startWidth);
+      updateLane(drag.id, { left, labelX: clamp(drag.startLabelX + left - drag.startLeft, -20, 120) });
     } else if (drag.mode === 'resize-left') {
       const left = clamp(drag.startLeft + delta, 0, drag.startLeft + drag.startWidth - 1.5);
-      updateLane(drag.id, { left, width: drag.startWidth + drag.startLeft - left });
+      const width = drag.startWidth + drag.startLeft - left;
+      const centerShift = left + width / 2 - (drag.startLeft + drag.startWidth / 2);
+      updateLane(drag.id, { left, width, labelX: clamp(drag.startLabelX + centerShift, -20, 120) });
     } else {
-      updateLane(drag.id, { width: clamp(drag.startWidth + delta, 1.5, 100 - drag.startLeft) });
+      const width = clamp(drag.startWidth + delta, 1.5, 100 - drag.startLeft);
+      updateLane(drag.id, { width, labelX: clamp(drag.startLabelX + (width - drag.startWidth) / 2, -20, 120) });
     }
   }
 
@@ -295,11 +344,48 @@ export default function Home() {
     }
   }
 
+  function startLabelDrag(event: React.PointerEvent<HTMLSpanElement>, lane: Lane) {
+    const bounds = gelMediaRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setSelectedId(lane.id);
+    labelDragRef.current = {
+      id: lane.id,
+      startX: event.clientX,
+      startY: event.clientY,
+      startLabelX: lane.labelX,
+      startLabelY: lane.labelY,
+      stageWidth: bounds.width,
+      stageHeight: bounds.height,
+    };
+  }
+
+  function moveLabelDrag(event: React.PointerEvent<HTMLSpanElement>) {
+    const drag = labelDragRef.current;
+    if (!drag || drag.id !== Number(event.currentTarget.dataset.laneId)) return;
+    const deltaX = ((event.clientX - drag.startX) / drag.stageWidth) * 100;
+    const deltaY = ((event.clientY - drag.startY) / drag.stageHeight) * 100;
+    updateLane(drag.id, {
+      labelX: clamp(drag.startLabelX + deltaX, -20, 120),
+      labelY: clamp(drag.startLabelY + deltaY, -20, 120),
+    });
+  }
+
+  function endLabelDrag(event: React.PointerEvent<HTMLSpanElement>) {
+    if (!labelDragRef.current) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    labelDragRef.current = null;
+    setStatus('Label moved');
+  }
+
   function nudgeLane(event: React.KeyboardEvent<HTMLDivElement>, lane: Lane) {
     const step = event.shiftKey ? 1 : 0.2;
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
       event.preventDefault();
-      updateLane(lane.id, { left: clamp(lane.left + (event.key === 'ArrowRight' ? step : -step), 0, 100 - lane.width) });
+      const left = clamp(lane.left + (event.key === 'ArrowRight' ? step : -step), 0, 100 - lane.width);
+      updateLane(lane.id, { left, labelX: clamp(lane.labelX + left - lane.left, -20, 120) });
     }
     if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault();
@@ -307,32 +393,117 @@ export default function Home() {
     }
   }
 
+  function nudgeLabel(event: React.KeyboardEvent<HTMLSpanElement>, lane: Lane) {
+    const step = event.shiftKey ? 1 : 0.2;
+    const patch: Partial<Lane> = {};
+    if (event.key === 'ArrowLeft') patch.labelX = clamp(lane.labelX - step, -20, 120);
+    if (event.key === 'ArrowRight') patch.labelX = clamp(lane.labelX + step, -20, 120);
+    if (event.key === 'ArrowUp') patch.labelY = clamp(lane.labelY - step, -20, 120);
+    if (event.key === 'ArrowDown') patch.labelY = clamp(lane.labelY + step, -20, 120);
+    if (Object.keys(patch).length) {
+      event.preventDefault();
+      event.stopPropagation();
+      updateLane(lane.id, patch);
+    }
+  }
+
   function applyStyleToAll() {
     if (!selectedLane) return;
-    const { color, labelColor, fontSize, fontFamily, bold, italic, rotation, labelPosition } = selectedLane;
-    setLanes((current) => current.map((lane) => ({ ...lane, color, labelColor, fontSize, fontFamily, bold, italic, rotation, labelPosition })));
+    const { color, labelColor, fontSize, fontFamily, bold, italic, rotation } = selectedLane;
+    setLanes((current) => current.map((lane) => ({ ...lane, color, labelColor, fontSize, fontFamily, bold, italic, rotation })));
     setStatus('Style applied');
   }
 
-  function exportPng() {
+  function exportFile(format: ExportFormat) {
     const source = imageUrl ? uploadedImageRef.current : demoCanvasRef.current;
     if (!source) return;
     const sourceWidth = imageUrl ? (uploadedImageRef.current?.naturalWidth || imageSize.width) : 1200;
     const sourceHeight = imageUrl ? (uploadedImageRef.current?.naturalHeight || imageSize.height) : 720;
     const scale = sourceWidth / 1200;
-    const topPadding = Math.max(110 * scale, sourceHeight * 0.2);
-    const bottomPadding = Math.max(35 * scale, sourceHeight * 0.05);
+    const measuringContext = document.createElement('canvas').getContext('2d');
+    let minimumLabelX = 0;
+    let maximumLabelX = sourceWidth;
+    let minimumLabelY = 0;
+    let maximumLabelY = sourceHeight;
+
+    lanes.forEach((lane) => {
+      if (!measuringContext) return;
+      const fontSize = lane.fontSize * scale;
+      const fontFamily = FONT_STACKS[lane.fontFamily] ?? FONT_STACKS.Manrope;
+      measuringContext.font = `${lane.italic ? 'italic ' : ''}${lane.bold ? '700 ' : '400 '}${fontSize}px ${fontFamily}`;
+      const textWidth = measuringContext.measureText(lane.label || `Lane ${lane.id}`).width + 10 * scale;
+      const textHeight = fontSize * 1.25;
+      const angle = Math.abs((lane.rotation * Math.PI) / 180);
+      const halfWidth = Math.abs(Math.cos(angle)) * textWidth / 2 + Math.abs(Math.sin(angle)) * textHeight / 2;
+      const halfHeight = Math.abs(Math.sin(angle)) * textWidth / 2 + Math.abs(Math.cos(angle)) * textHeight / 2;
+      const labelX = (lane.labelX / 100) * sourceWidth;
+      const labelY = (lane.labelY / 100) * sourceHeight;
+      minimumLabelX = Math.min(minimumLabelX, labelX - halfWidth);
+      maximumLabelX = Math.max(maximumLabelX, labelX + halfWidth);
+      minimumLabelY = Math.min(minimumLabelY, labelY - halfHeight);
+      maximumLabelY = Math.max(maximumLabelY, labelY + halfHeight);
+    });
+
+    const leftPadding = Math.ceil(Math.max(20 * scale, -minimumLabelX + 12 * scale));
+    const rightPadding = Math.ceil(Math.max(20 * scale, maximumLabelX - sourceWidth + 12 * scale));
+    const topPadding = Math.ceil(Math.max(28 * scale, -minimumLabelY + 12 * scale));
+    const bottomPadding = Math.ceil(Math.max(28 * scale, maximumLabelY - sourceHeight + 12 * scale));
+    const outputWidth = Math.ceil(sourceWidth + leftPadding + rightPadding);
+    const outputHeight = Math.ceil(sourceHeight + topPadding + bottomPadding);
+    const fileBase = (projectName || 'gel').trim().replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'gel';
+
+    const download = (blob: Blob, extension: string) => {
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `${fileBase}-annotated.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    };
+
+    if (format === 'svg') {
+      const imageCanvas = document.createElement('canvas');
+      imageCanvas.width = sourceWidth;
+      imageCanvas.height = sourceHeight;
+      const imageContext = imageCanvas.getContext('2d');
+      if (!imageContext || !measuringContext) return;
+      imageContext.drawImage(source, 0, 0, sourceWidth, sourceHeight);
+      const embeddedImage = imageCanvas.toDataURL('image/png');
+
+      const laneMarkup = lanes.map((lane) => {
+        const x = leftPadding + (lane.left / 100) * sourceWidth;
+        const width = (lane.width / 100) * sourceWidth;
+        const y = topPadding + sourceHeight * 0.04;
+        const height = sourceHeight * 0.92;
+        const fontSize = lane.fontSize * scale;
+        const fontFamily = FONT_STACKS[lane.fontFamily] ?? FONT_STACKS.Manrope;
+        const text = lane.label || `Lane ${lane.id}`;
+        measuringContext.font = `${lane.italic ? 'italic ' : ''}${lane.bold ? '700 ' : '400 '}${fontSize}px ${fontFamily}`;
+        const textWidth = measuringContext.measureText(text).width;
+        const padding = 5 * scale;
+        const labelX = leftPadding + (lane.labelX / 100) * sourceWidth;
+        const labelY = topPadding + (lane.labelY / 100) * sourceHeight;
+        return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeXml(lane.color)}" fill-opacity=".035" stroke="${escapeXml(lane.color)}" stroke-width="${Math.max(2, 2 * scale)}"/><g transform="translate(${labelX} ${labelY}) rotate(${lane.rotation})"><rect x="${-textWidth / 2 - padding}" y="${-fontSize * 0.65}" width="${textWidth + padding * 2}" height="${fontSize * 1.25}" fill="#fff" fill-opacity=".92"/><text x="0" y="0" dominant-baseline="middle" text-anchor="middle" fill="${escapeXml(lane.labelColor)}" font-family="${escapeXml(fontFamily)}" font-size="${fontSize}" font-weight="${lane.bold ? 700 : 400}" font-style="${lane.italic ? 'italic' : 'normal'}">${escapeXml(text)}</text></g>`;
+      }).join('');
+
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${outputWidth}" height="${outputHeight}" viewBox="0 0 ${outputWidth} ${outputHeight}"><rect width="100%" height="100%" fill="#fff"/><image href="${embeddedImage}" x="${leftPadding}" y="${topPadding}" width="${sourceWidth}" height="${sourceHeight}" preserveAspectRatio="none"/>${laneMarkup}</svg>`;
+      download(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }), 'svg');
+      setStatus('SVG exported');
+      return;
+    }
+
     const output = document.createElement('canvas');
-    output.width = sourceWidth;
-    output.height = Math.ceil(sourceHeight + topPadding + bottomPadding);
+    output.width = outputWidth;
+    output.height = outputHeight;
     const context = output.getContext('2d');
     if (!context) return;
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, output.width, output.height);
-    context.drawImage(source, 0, topPadding, sourceWidth, sourceHeight);
+    context.drawImage(source, leftPadding, topPadding, sourceWidth, sourceHeight);
 
     lanes.forEach((lane) => {
-      const x = (lane.left / 100) * sourceWidth;
+      const x = leftPadding + (lane.left / 100) * sourceWidth;
       const width = (lane.width / 100) * sourceWidth;
       const y = topPadding + sourceHeight * 0.04;
       const height = sourceHeight * 0.92;
@@ -347,11 +518,8 @@ export default function Home() {
       context.textAlign = 'center';
       context.textBaseline = 'middle';
       context.fillStyle = lane.labelColor;
-      let labelY = topPadding - Math.max(18 * scale, fontSize * 0.9);
-      if (lane.labelPosition === 'inside') labelY = topPadding + Math.max(22 * scale, fontSize);
-      if (lane.labelPosition === 'bottom') labelY = topPadding + sourceHeight + Math.max(16 * scale, fontSize * 0.75);
       context.save();
-      context.translate(x + width / 2, labelY);
+      context.translate(leftPadding + (lane.labelX / 100) * sourceWidth, topPadding + (lane.labelY / 100) * sourceHeight);
       context.rotate((lane.rotation * Math.PI) / 180);
       const metrics = context.measureText(lane.label || `Lane ${lane.id}`);
       const padding = 5 * scale;
@@ -362,15 +530,13 @@ export default function Home() {
       context.restore();
     });
 
+    const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+    const extension = format === 'jpeg' ? 'jpg' : 'png';
     output.toBlob((blob) => {
       if (!blob) return;
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `${projectName || 'gel'}-annotated.png`;
-      link.click();
-      window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-      setStatus('PNG exported');
-    }, 'image/png');
+      download(blob, extension);
+      setStatus(`${format.toUpperCase()} exported`);
+    }, mimeType, format === 'jpeg' ? 0.94 : undefined);
   }
 
   const mediaAspect = `${imageSize.width} / ${imageSize.height}`;
@@ -391,7 +557,14 @@ export default function Home() {
           </label>
           <Button variant="outline" className="toolbar-button" onClick={addLane}><Plus /> Add</Button>
           <Button variant="outline" className="toolbar-button optional-control" onClick={distributeLanes} disabled={lanes.length < 2}><AlignHorizontalDistributeCenter /> Distribute</Button>
-          <Button className="toolbar-button export-button" onClick={exportPng}><Download /> Export</Button>
+          <div className="export-controls">
+            <NativeSelect aria-label="Export format" size="sm" value={exportFormat} onChange={(event) => setExportFormat(event.target.value as ExportFormat)}>
+              <NativeSelectOption value="png">PNG</NativeSelectOption>
+              <NativeSelectOption value="jpeg">JPEG</NativeSelectOption>
+              <NativeSelectOption value="svg">SVG</NativeSelectOption>
+            </NativeSelect>
+            <Button className="toolbar-button export-button" onClick={() => exportFile(exportFormat)}><Download /> Export</Button>
+          </div>
         </div>
       </header>
 
@@ -476,26 +649,42 @@ export default function Home() {
                   onKeyDown={(event) => nudgeLane(event, lane)}
                   onFocus={() => setSelectedId(lane.id)}
                 >
-                  <span
-                    className={`lane-label lane-label-${lane.labelPosition}`}
-                    style={{
-                      color: lane.labelColor,
-                      fontFamily: FONT_STACKS[lane.fontFamily] ?? FONT_STACKS.Manrope,
-                      fontSize: `${lane.fontSize}px`,
-                      fontWeight: lane.bold ? 700 : 400,
-                      fontStyle: lane.italic ? 'italic' : 'normal',
-                      transform: `translateX(-50%) rotate(${lane.rotation}deg)`,
-                    }}
-                  >
-                    {lane.label || `Lane ${index + 1}`}
-                  </span>
                   <span className="resize-handle left" data-mode="resize-left" aria-hidden="true" />
                   <span className="resize-handle right" data-mode="resize-right" aria-hidden="true" />
                 </div>
               ))}
+
+              {lanes.map((lane, index) => (
+                <span
+                  key={`label-${lane.id}`}
+                  data-lane-id={lane.id}
+                  className={`lane-label ${selectedId === lane.id ? 'is-selected' : ''}`}
+                  style={{
+                    left: `${lane.labelX}%`,
+                    top: `${lane.labelY}%`,
+                    color: lane.labelColor,
+                    fontFamily: FONT_STACKS[lane.fontFamily] ?? FONT_STACKS.Manrope,
+                    fontSize: `${lane.fontSize}px`,
+                    fontWeight: lane.bold ? 700 : 400,
+                    fontStyle: lane.italic ? 'italic' : 'normal',
+                    transform: `translate(-50%, -50%) rotate(${lane.rotation}deg)`,
+                  }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`${lane.label || `Lane ${index + 1}`} label. Drag to reposition.`}
+                  onPointerDown={(event) => startLabelDrag(event, lane)}
+                  onPointerMove={moveLabelDrag}
+                  onPointerUp={endLabelDrag}
+                  onPointerCancel={endLabelDrag}
+                  onKeyDown={(event) => nudgeLabel(event, lane)}
+                  onFocus={() => setSelectedId(lane.id)}
+                >
+                  {lane.label || `Lane ${index + 1}`}
+                </span>
+              ))}
             </div>
           </div>
-          <div className="canvas-help"><span>Drag</span><span>Handles: resize</span><span>← →: nudge</span></div>
+          <div className="canvas-help"><span>Lane: drag</span><span>Label: drag</span><span>Handles: resize</span></div>
         </section>
 
         <aside className="inspector-panel">
@@ -562,11 +751,23 @@ export default function Home() {
                 </div>
                 <div className="field-group">
                   <label htmlFor="label-position">Position</label>
-                  <NativeSelect id="label-position" className="w-full" value={selectedLane.labelPosition} onChange={(event) => updateLane(selectedLane.id, { labelPosition: event.target.value as LabelPosition })}>
+                  <NativeSelect id="label-position" className="w-full" value={selectedLane.labelPosition} onChange={(event) => {
+                    const labelPosition = event.target.value as LabelPosition;
+                    updateLane(selectedLane.id, { labelPosition, labelY: LABEL_Y[labelPosition] });
+                  }}>
                     <NativeSelectOption value="top">Above</NativeSelectOption>
                     <NativeSelectOption value="inside">Inside</NativeSelectOption>
                     <NativeSelectOption value="bottom">Below</NativeSelectOption>
                   </NativeSelect>
+                </div>
+              </div>
+
+              <div className="coordinate-block">
+                <div className="field-label-row"><label>Label coordinates</label><output>X / Y %</output></div>
+                <div className="coordinate-grid">
+                  <Input aria-label="Label horizontal position" type="number" min={-20} max={120} step={0.1} value={Number(selectedLane.labelX.toFixed(1))} onChange={(event) => updateLane(selectedLane.id, { labelX: clamp(Number(event.target.value), -20, 120) })} />
+                  <Input aria-label="Label vertical position" type="number" min={-20} max={120} step={0.1} value={Number(selectedLane.labelY.toFixed(1))} onChange={(event) => updateLane(selectedLane.id, { labelY: clamp(Number(event.target.value), -20, 120) })} />
+                  <Button variant="outline" size="sm" onClick={() => updateLane(selectedLane.id, { labelX: selectedLane.left + selectedLane.width / 2, labelY: LABEL_Y[selectedLane.labelPosition] })}>Reset</Button>
                 </div>
               </div>
 

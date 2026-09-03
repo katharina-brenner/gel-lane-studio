@@ -3,6 +3,6 @@
   <rect x="6.5" y="5.5" width="19" height="21" rx="4.5" stroke="white" stroke-opacity=".3"/>
   <path d="M13 6V26M19 6V26" stroke="white" stroke-opacity=".18"/>
   <rect x="9" y="9" width="9" height="2" rx="1" fill="#F7F8FB"/>
-  <rect x="11" y="15" width="13" height="3" rx="1.5" fill="#FFD21C"/>
-  <rect x="10" y="22" width="14" height="2" rx="1" fill="#7DA0FF"/>
+  <rect x="11" y="15" width="13" height="3" rx="1.5" fill="#62B6D8"/>
+  <rect x="10" y="22" width="14" height="2" rx="1" fill="#A7C9DB"/>
 </svg>
