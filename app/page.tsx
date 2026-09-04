@@ -369,8 +369,9 @@ export default function Home() {
       labelPosition: reference.labelPosition,
       labelX: clamp(lane.left + lane.width / 2, -20, 120),
       labelY: reference.labelY,
+      rotation: reference.rotation,
     })));
-    setStatus('Labels aligned');
+    setStatus('All labels aligned');
   }
 
   function fitLaneGrid() {
@@ -875,6 +876,7 @@ export default function Home() {
           </label>
           <Button variant="outline" className="toolbar-button" onClick={addLane}><Plus /> Add</Button>
           <Button variant="outline" className="toolbar-button optional-control" onClick={distributeLanes} disabled={lanes.length < 2}><AlignHorizontalDistributeCenter /> Distribute</Button>
+          <Button variant="outline" className="toolbar-button optional-control" onClick={alignLabels} disabled={lanes.length < 2} title="Align every label to the selected label"><AlignVerticalJustifyCenter /> Align all</Button>
           <div className="export-controls">
             <NativeSelect aria-label="Export format" size="sm" value={exportFormat} onChange={(event) => setExportFormat(event.target.value as ExportFormat)}>
               <NativeSelectOption value="png">PNG</NativeSelectOption>
@@ -931,7 +933,7 @@ export default function Home() {
             <Button variant="outline" size="sm" onClick={distributeLanes} disabled={lanes.length < 2}><AlignHorizontalDistributeCenter /> Space</Button>
             <Button variant="outline" size="sm" onClick={equalizeWidths} disabled={!lanes.length}><Equal /> Same width</Button>
             <Button variant="outline" size="sm" className="auto-fit-button" onClick={fitLaneGrid} disabled={!lanes.length}><ScanLine /> Auto fit boxes</Button>
-            <Button variant="outline" size="sm" className="align-labels-button" onClick={alignLabels} disabled={lanes.length < 2} title="Align all labels to the selected label"><AlignVerticalJustifyCenter /> Align labels</Button>
+            <Button variant="outline" size="sm" className="align-labels-button" onClick={alignLabels} disabled={lanes.length < 2} title="Align every label to the selected label"><AlignVerticalJustifyCenter /> Align all labels</Button>
           </div>
 
           <div className="lane-list-heading"><span>Lanes</span><span>{lanes.length}</span></div>
