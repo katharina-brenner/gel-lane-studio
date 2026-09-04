@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlignHorizontalDistributeCenter,
   Bold,
+  Copy,
   Crop,
   Download,
   Equal,
@@ -13,6 +14,7 @@ import {
   Italic,
   Plus,
   RotateCcw,
+  RotateCw,
   ScanLine,
   SlidersHorizontal,
   Trash2,
@@ -80,6 +82,15 @@ type LabelDragState = {
   startY: number;
   startLabelX: number;
   startLabelY: number;
+  stageWidth: number;
+  stageHeight: number;
+};
+
+type CropDragState = {
+  side: keyof CropState;
+  startX: number;
+  startY: number;
+  startValue: number;
   stageWidth: number;
   stageHeight: number;
 };
@@ -189,6 +200,7 @@ export default function Home() {
   const gelMediaRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const labelDragRef = useRef<LabelDragState | null>(null);
+  const cropDragRef = useRef<CropDragState | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const nextIdRef = useRef(10);
 
@@ -405,6 +417,41 @@ export default function Home() {
     setStatus('Crop adjusted');
   }
 
+  function startCropDrag(event: React.PointerEvent<HTMLSpanElement>, side: keyof CropState) {
+    const bounds = gelMediaRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    cropDragRef.current = {
+      side,
+      startX: event.clientX,
+      startY: event.clientY,
+      startValue: crop[side],
+      stageWidth: bounds.width,
+      stageHeight: bounds.height,
+    };
+  }
+
+  function moveCropDrag(event: React.PointerEvent<HTMLSpanElement>) {
+    const drag = cropDragRef.current;
+    if (!drag) return;
+    const deltaX = ((event.clientX - drag.startX) / drag.stageWidth) * 100;
+    const deltaY = ((event.clientY - drag.startY) / drag.stageHeight) * 100;
+    const delta = drag.side === 'left' ? deltaX
+      : drag.side === 'right' ? -deltaX
+        : drag.side === 'top' ? deltaY
+          : -deltaY;
+    updateCrop(drag.side, drag.startValue + delta);
+  }
+
+  function endCropDrag(event: React.PointerEvent<HTMLSpanElement>) {
+    if (!cropDragRef.current) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    cropDragRef.current = null;
+    setStatus('Crop set');
+  }
+
   function startDrag(event: React.PointerEvent<HTMLDivElement>, lane: Lane) {
     const target = event.target as HTMLElement;
     const mode = (target.dataset.mode as DragState['mode'] | undefined) ?? 'move';
@@ -589,6 +636,26 @@ export default function Home() {
     const { color, labelColor, fontSize, fontFamily, bold, italic, rotation } = selectedLane;
     setLanes((current) => current.map((lane) => ({ ...lane, color, labelColor, fontSize, fontFamily, bold, italic, rotation })));
     setStatus('Style applied');
+  }
+
+  function applyBoxToAll() {
+    if (!selectedLane) return;
+    setLanes((current) => current.map((lane) => {
+      const width = Math.min(selectedLane.width, 100 - lane.left);
+      const top = clamp(selectedLane.top, 0, 100 - selectedLane.height);
+      const centerShiftX = (width - lane.width) / 2;
+      const centerShiftY = top + selectedLane.height / 2 - (lane.top + lane.height / 2);
+      return {
+        ...lane,
+        top,
+        width,
+        height: selectedLane.height,
+        boxRotation: selectedLane.boxRotation,
+        labelX: clamp(lane.labelX + centerShiftX, -20, 120),
+        labelY: clamp(lane.labelY + centerShiftY, -20, 120),
+      };
+    }));
+    setStatus('Box shape applied');
   }
 
   function exportFile(format: ExportFormat) {
@@ -885,7 +952,7 @@ export default function Home() {
                   <span className="resize-handle right" data-mode="resize-right" aria-hidden="true" />
                   <span className="resize-handle top" data-mode="resize-top" aria-hidden="true" />
                   <span className="resize-handle bottom" data-mode="resize-bottom" aria-hidden="true" />
-                  <span className="rotate-handle" data-mode="rotate" aria-hidden="true" />
+                  <span className="rotate-handle" data-mode="rotate" aria-hidden="true"><RotateCw /></span>
                 </div>
               ))}
 
@@ -922,10 +989,22 @@ export default function Home() {
               {crop.bottom > 0 && <span className="crop-shade bottom" style={{ height: `${crop.bottom}%` }} />}
               {crop.left > 0 && <span className="crop-shade left" style={{ top: `${crop.top}%`, bottom: `${crop.bottom}%`, width: `${crop.left}%` }} />}
               {crop.right > 0 && <span className="crop-shade right" style={{ top: `${crop.top}%`, bottom: `${crop.bottom}%`, width: `${crop.right}%` }} />}
-              <span className="crop-outline" style={{ top: `${crop.top}%`, right: `${crop.right}%`, bottom: `${crop.bottom}%`, left: `${crop.left}%` }} />
+              <span className="crop-outline" style={{ top: `${crop.top}%`, right: `${crop.right}%`, bottom: `${crop.bottom}%`, left: `${crop.left}%` }}>
+                {(['top', 'right', 'bottom', 'left'] as const).map((side) => (
+                  <span
+                    key={side}
+                    className={`crop-handle ${side}`}
+                    aria-hidden="true"
+                    onPointerDown={(event) => startCropDrag(event, side)}
+                    onPointerMove={moveCropDrag}
+                    onPointerUp={endCropDrag}
+                    onPointerCancel={endCropDrag}
+                  />
+                ))}
+              </span>
             </div>
           </div>
-          <div className="canvas-help"><span>Box: drag</span><span>Edges: resize</span><span>Circle: rotate</span><span>Label: drag</span></div>
+          <div className="canvas-help"><span>Box: drag</span><span>Edges: resize</span><span>Circle: rotate</span><span>Crop frame: drag</span></div>
         </section>
 
         <aside className="inspector-panel">
@@ -941,10 +1020,13 @@ export default function Home() {
                   <label><span>W</span><Input aria-label="Box width" type="number" min={1.5} max={100 - selectedLane.left} step={0.1} value={Number(selectedLane.width.toFixed(1))} onChange={(event) => updateLaneBox(selectedLane.id, { width: clamp(Number(event.target.value), 1.5, 100 - selectedLane.left) })} /></label>
                   <label><span>H</span><Input aria-label="Box height" type="number" min={2} max={100 - selectedLane.top} step={0.1} value={Number(selectedLane.height.toFixed(1))} onChange={(event) => updateLaneBox(selectedLane.id, { height: clamp(Number(event.target.value), 2, 100 - selectedLane.top) })} /></label>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => {
-                  const layout = getGridLayout(Math.max(1, lanes.length));
-                  updateLaneBox(selectedLane.id, { top: layout.top, height: layout.height, boxRotation: 0 });
-                }}>Reset shape</Button>
+                <div className="geometry-actions">
+                  <Button variant="outline" size="sm" onClick={() => {
+                    const layout = getGridLayout(Math.max(1, lanes.length));
+                    updateLaneBox(selectedLane.id, { top: layout.top, height: layout.height, boxRotation: 0 });
+                  }}>Reset shape</Button>
+                  <Button variant="outline" size="sm" onClick={applyBoxToAll}><Copy /> Copy to all</Button>
+                </div>
               </div>
 
               <div className="field-group">
