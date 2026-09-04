@@ -374,6 +374,29 @@ export default function Home() {
     setStatus('All labels aligned');
   }
 
+  function tidyForExport() {
+    if (lanes.length < 2) return;
+    const reference = selectedLane ?? lanes[0];
+    const sorted = [...lanes].sort((a, b) => a.left - b.left);
+    const start = sorted[0].left + sorted[0].width / 2;
+    const end = sorted.at(-1)!.left + sorted.at(-1)!.width / 2;
+    const spacing = (end - start) / (sorted.length - 1);
+    const positions = new Map(sorted.map((lane, index) => [lane.id, clamp(start + index * spacing - lane.width / 2, 0, 100 - lane.width)]));
+
+    setLanes((current) => current.map((lane) => {
+      const left = positions.get(lane.id) ?? lane.left;
+      return {
+        ...lane,
+        left,
+        labelPosition: reference.labelPosition,
+        labelX: clamp(left + lane.width / 2, -20, 120),
+        labelY: reference.labelY,
+        rotation: reference.rotation,
+      };
+    }));
+    setStatus('Aligned · even spacing');
+  }
+
   function fitLaneGrid() {
     if (!lanes.length) return;
     const sorted = [...lanes].sort((a, b) => a.left - b.left);
@@ -875,8 +898,9 @@ export default function Home() {
             <input className="sr-only" type="file" accept="image/*" onChange={(event) => handleUpload(event.target.files?.[0])} />
           </label>
           <Button variant="outline" className="toolbar-button" onClick={addLane}><Plus /> Add</Button>
-          <Button variant="outline" className="toolbar-button optional-control" onClick={distributeLanes} disabled={lanes.length < 2}><AlignHorizontalDistributeCenter /> Distribute</Button>
+          <Button variant="outline" className="toolbar-button optional-control" onClick={distributeLanes} disabled={lanes.length < 2}><AlignHorizontalDistributeCenter /> Even spacing</Button>
           <Button variant="outline" className="toolbar-button optional-control" onClick={alignLabels} disabled={lanes.length < 2} title="Align every label to the selected label"><AlignVerticalJustifyCenter /> Align all</Button>
+          <Button variant="outline" className="toolbar-button optional-control" onClick={tidyForExport} disabled={lanes.length < 2} title="Align labels and distribute them evenly"><ScanLine /> Tidy export</Button>
           <div className="export-controls">
             <NativeSelect aria-label="Export format" size="sm" value={exportFormat} onChange={(event) => setExportFormat(event.target.value as ExportFormat)}>
               <NativeSelectOption value="png">PNG</NativeSelectOption>
@@ -930,10 +954,11 @@ export default function Home() {
           </div>
 
           <div className="panel-action-row">
-            <Button variant="outline" size="sm" onClick={distributeLanes} disabled={lanes.length < 2}><AlignHorizontalDistributeCenter /> Space</Button>
+            <Button variant="outline" size="sm" onClick={distributeLanes} disabled={lanes.length < 2}><AlignHorizontalDistributeCenter /> Even spacing</Button>
             <Button variant="outline" size="sm" onClick={equalizeWidths} disabled={!lanes.length}><Equal /> Same width</Button>
             <Button variant="outline" size="sm" className="auto-fit-button" onClick={fitLaneGrid} disabled={!lanes.length}><ScanLine /> Auto fit boxes</Button>
             <Button variant="outline" size="sm" className="align-labels-button" onClick={alignLabels} disabled={lanes.length < 2} title="Align every label to the selected label"><AlignVerticalJustifyCenter /> Align all labels</Button>
+            <Button variant="outline" size="sm" className="tidy-layout-button" onClick={tidyForExport} disabled={lanes.length < 2} title="Align labels and distribute them evenly"><ScanLine /> Tidy export</Button>
           </div>
 
           <div className="lane-list-heading"><span>Lanes</span><span>{lanes.length}</span></div>
