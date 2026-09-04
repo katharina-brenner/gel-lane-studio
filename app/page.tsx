@@ -1129,6 +1129,7 @@ export default function Home() {
           )}
         </aside>
       </section>
+      <footer className="software-copyright">© 2026 Katharina Julia Brenner</footer>
       <span className="sr-only" role="status" aria-live="polite">{status}</span>
     </main>
   );
