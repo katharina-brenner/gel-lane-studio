@@ -88,17 +88,13 @@ button { cursor: pointer; }
 }
 .brand-lockup { display: flex; min-width: 200px; align-items: center; gap: 12px; }
 .brand-mark {
-  display: grid;
-  width: 40px;
-  height: 40px;
+  display: block;
+  width: 48px;
+  height: 56px;
   flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid #173e5b;
-  border-radius: 6px;
-  background: #0a2942;
-  box-shadow: 0 3px 8px rgba(16,35,51,.14);
+  overflow: hidden;
 }
-.brand-mark svg { width: 23px; height: 23px; color: #78c7e4; stroke-width: 1.8; }
+.brand-mark img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center; }
 .brand-name { display: flex; align-items: baseline; gap: 5px; margin: 0; font-size: 15px; letter-spacing: -.035em; }
 .brand-name span:first-child { font-weight: 850; }
 .brand-name span:last-child { color: #586579; font-weight: 560; }

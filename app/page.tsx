@@ -8,7 +8,6 @@ import {
   Crop,
   Download,
   Equal,
-  FlaskConical,
   GripVertical,
   ImagePlus,
   Italic,
@@ -811,7 +810,7 @@ export default function Home() {
       <header className="topbar">
         <div className="brand-lockup">
           <span className="brand-mark" aria-hidden="true">
-            <FlaskConical />
+            <img src="/lab-portrait-logo.png" alt="" />
           </span>
           <p className="brand-name"><span>Lane</span><span>Studio</span></p>
         </div>
