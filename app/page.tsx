@@ -12,6 +12,7 @@ import {
   GripVertical,
   ImagePlus,
   Italic,
+  Maximize2,
   Plus,
   RotateCcw,
   RotateCw,
@@ -59,7 +60,7 @@ type Lane = {
 
 type DragState = {
   id: number;
-  mode: 'move' | 'resize-left' | 'resize-right' | 'resize-top' | 'resize-bottom' | 'rotate';
+  mode: 'move' | 'resize-left' | 'resize-right' | 'resize-top' | 'resize-bottom' | 'resize-top-left' | 'resize-top-right' | 'resize-bottom-left' | 'resize-bottom-right' | 'rotate';
   startX: number;
   startY: number;
   startLeft: number;
@@ -76,12 +77,19 @@ type DragState = {
   stageHeight: number;
 };
 
-type LabelDragState = {
+type LabelTransformState = {
   id: number;
+  mode: 'move' | 'resize' | 'rotate';
   startX: number;
   startY: number;
   startLabelX: number;
   startLabelY: number;
+  startFontSize: number;
+  startRotation: number;
+  centerX: number;
+  centerY: number;
+  startPointerDistance: number;
+  startPointerAngle: number;
   stageWidth: number;
   stageHeight: number;
 };
@@ -199,7 +207,7 @@ export default function Home() {
   const uploadedImageRef = useRef<HTMLImageElement>(null);
   const gelMediaRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
-  const labelDragRef = useRef<LabelDragState | null>(null);
+  const labelDragRef = useRef<LabelTransformState | null>(null);
   const cropDragRef = useRef<CropDragState | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const nextIdRef = useRef(10);
@@ -532,16 +540,18 @@ export default function Home() {
     let localCenterShiftX = 0;
     let localCenterShiftY = 0;
 
-    if (drag.mode === 'resize-left') {
+    if (drag.mode === 'resize-left' || drag.mode === 'resize-top-left' || drag.mode === 'resize-bottom-left') {
       width = clamp(drag.startWidth - (localDeltaX / drag.stageWidth) * 100, 1.5, 100);
       localCenterShiftX = ((drag.startWidth - width) / 200) * drag.stageWidth;
-    } else if (drag.mode === 'resize-right') {
+    } else if (drag.mode === 'resize-right' || drag.mode === 'resize-top-right' || drag.mode === 'resize-bottom-right') {
       width = clamp(drag.startWidth + (localDeltaX / drag.stageWidth) * 100, 1.5, 100);
       localCenterShiftX = ((width - drag.startWidth) / 200) * drag.stageWidth;
-    } else if (drag.mode === 'resize-top') {
+    }
+
+    if (drag.mode === 'resize-top' || drag.mode === 'resize-top-left' || drag.mode === 'resize-top-right') {
       height = clamp(drag.startHeight - (localDeltaY / drag.stageHeight) * 100, 2, 100);
       localCenterShiftY = ((drag.startHeight - height) / 200) * drag.stageHeight;
-    } else if (drag.mode === 'resize-bottom') {
+    } else if (drag.mode === 'resize-bottom' || drag.mode === 'resize-bottom-left' || drag.mode === 'resize-bottom-right') {
       height = clamp(drag.startHeight + (localDeltaY / drag.stageHeight) * 100, 2, 100);
       localCenterShiftY = ((height - drag.startHeight) / 200) * drag.stageHeight;
     }
@@ -577,16 +587,28 @@ export default function Home() {
   function startLabelDrag(event: React.PointerEvent<HTMLSpanElement>, lane: Lane) {
     const bounds = gelMediaRef.current?.getBoundingClientRect();
     if (!bounds) return;
+    const target = event.target as HTMLElement;
+    const handle = target.closest('[data-label-mode]') as HTMLElement | null;
+    const mode = (handle?.dataset.labelMode as LabelTransformState['mode'] | undefined) ?? 'move';
+    const centerX = bounds.left + (lane.labelX / 100) * bounds.width;
+    const centerY = bounds.top + (lane.labelY / 100) * bounds.height;
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     setSelectedId(lane.id);
     labelDragRef.current = {
       id: lane.id,
+      mode,
       startX: event.clientX,
       startY: event.clientY,
       startLabelX: lane.labelX,
       startLabelY: lane.labelY,
+      startFontSize: lane.fontSize,
+      startRotation: lane.rotation,
+      centerX,
+      centerY,
+      startPointerDistance: Math.max(1, Math.hypot(event.clientX - centerX, event.clientY - centerY)),
+      startPointerAngle: Math.atan2(event.clientY - centerY, event.clientX - centerX) * 180 / Math.PI,
       stageWidth: bounds.width,
       stageHeight: bounds.height,
     };
@@ -595,6 +617,22 @@ export default function Home() {
   function moveLabelDrag(event: React.PointerEvent<HTMLSpanElement>) {
     const drag = labelDragRef.current;
     if (!drag || drag.id !== Number(event.currentTarget.dataset.laneId)) return;
+
+    if (drag.mode === 'resize') {
+      const pointerDistance = Math.max(1, Math.hypot(event.clientX - drag.centerX, event.clientY - drag.centerY));
+      const fontSize = clamp(drag.startFontSize * pointerDistance / drag.startPointerDistance, 8, 72);
+      updateLane(drag.id, { fontSize: Math.round(fontSize) });
+      return;
+    }
+
+    if (drag.mode === 'rotate') {
+      const pointerAngle = Math.atan2(event.clientY - drag.centerY, event.clientX - drag.centerX) * 180 / Math.PI;
+      const angleDelta = ((pointerAngle - drag.startPointerAngle + 540) % 360) - 180;
+      const rawRotation = ((drag.startRotation + angleDelta + 540) % 360) - 180;
+      updateLane(drag.id, { rotation: event.shiftKey ? Math.round(rawRotation / 5) * 5 : Math.round(rawRotation) });
+      return;
+    }
+
     const deltaX = ((event.clientX - drag.startX) / drag.stageWidth) * 100;
     const deltaY = ((event.clientY - drag.startY) / drag.stageHeight) * 100;
     updateLane(drag.id, {
@@ -605,9 +643,10 @@ export default function Home() {
 
   function endLabelDrag(event: React.PointerEvent<HTMLSpanElement>) {
     if (!labelDragRef.current) return;
+    const mode = labelDragRef.current.mode;
     event.currentTarget.releasePointerCapture(event.pointerId);
     labelDragRef.current = null;
-    setStatus('Label moved');
+    setStatus(mode === 'resize' ? 'Text resized' : mode === 'rotate' ? 'Text rotated' : 'Label moved');
   }
 
   function nudgeLane(event: React.KeyboardEvent<HTMLDivElement>, lane: Lane) {
@@ -965,6 +1004,10 @@ export default function Home() {
                   <span className="resize-handle right" data-mode="resize-right" aria-hidden="true" />
                   <span className="resize-handle top" data-mode="resize-top" aria-hidden="true" />
                   <span className="resize-handle bottom" data-mode="resize-bottom" aria-hidden="true" />
+                  <span className="resize-handle corner top-left" data-mode="resize-top-left" aria-hidden="true" />
+                  <span className="resize-handle corner top-right" data-mode="resize-top-right" aria-hidden="true" />
+                  <span className="resize-handle corner bottom-left" data-mode="resize-bottom-left" aria-hidden="true" />
+                  <span className="resize-handle corner bottom-right" data-mode="resize-bottom-right" aria-hidden="true" />
                   <span className="rotate-handle" data-mode="rotate" aria-hidden="true"><RotateCw /></span>
                 </div>
               ))}
@@ -986,7 +1029,7 @@ export default function Home() {
                   }}
                   tabIndex={0}
                   role="button"
-                  aria-label={`${lane.label || `Lane ${index + 1}`} label. Drag to reposition.`}
+                  aria-label={`${lane.label || `Lane ${index + 1}`} label. Drag to move; use the square handle to resize and the round handle to rotate.`}
                   onPointerDown={(event) => startLabelDrag(event, lane)}
                   onPointerMove={moveLabelDrag}
                   onPointerUp={endLabelDrag}
@@ -994,7 +1037,9 @@ export default function Home() {
                   onKeyDown={(event) => nudgeLabel(event, lane)}
                   onFocus={() => setSelectedId(lane.id)}
                 >
-                  {lane.label || `Lane ${index + 1}`}
+                  <span className="lane-label-text">{lane.label || `Lane ${index + 1}`}</span>
+                  <span className="label-transform-handle label-size-handle" data-label-mode="resize" aria-hidden="true"><Maximize2 /></span>
+                  <span className="label-transform-handle label-rotate-handle" data-label-mode="rotate" aria-hidden="true"><RotateCw /></span>
                 </span>
               ))}
 
@@ -1017,7 +1062,7 @@ export default function Home() {
               </span>
             </div>
           </div>
-          <div className="canvas-help"><span>Box: drag</span><span>Edges: resize</span><span>Circle: rotate</span><span>Crop frame: drag</span></div>
+          <div className="canvas-help"><span>Label: drag</span><span>Square: text size</span><span>Circle: rotate</span><span>Lane edges/corners: resize</span></div>
         </section>
 
         <aside className="inspector-panel">
@@ -1073,7 +1118,7 @@ export default function Home() {
 
               <div className="field-group">
                 <div className="field-label-row"><label htmlFor="font-size">Text size</label><output>{selectedLane.fontSize} px</output></div>
-                <Slider id="font-size" min={10} max={44} step={1} value={[selectedLane.fontSize]} onValueChange={(value) => updateLane(selectedLane.id, { fontSize: Array.isArray(value) ? Number(value[0]) : Number(value) })} />
+                <Slider id="font-size" min={8} max={72} step={1} value={[selectedLane.fontSize]} onValueChange={(value) => updateLane(selectedLane.id, { fontSize: Array.isArray(value) ? Number(value[0]) : Number(value) })} />
               </div>
 
               <div className="format-row">
@@ -1097,6 +1142,7 @@ export default function Home() {
                 <div className="field-group">
                   <label htmlFor="rotation">Angle</label>
                   <NativeSelect id="rotation" className="w-full" value={String(selectedLane.rotation)} onChange={(event) => updateLane(selectedLane.id, { rotation: Number(event.target.value) })}>
+                    {![0, -30, -45, -60, -90].includes(selectedLane.rotation) && <NativeSelectOption value={String(selectedLane.rotation)}>{selectedLane.rotation}°</NativeSelectOption>}
                     <NativeSelectOption value="0">0°</NativeSelectOption>
                     <NativeSelectOption value="-30">−30°</NativeSelectOption>
                     <NativeSelectOption value="-45">−45°</NativeSelectOption>

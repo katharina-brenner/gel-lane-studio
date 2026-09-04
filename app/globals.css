@@ -250,6 +250,13 @@ button { cursor: pointer; }
 .lane-label:hover { border-color: rgba(11,95,165,.3); }
 .lane-label.is-selected { z-index: 8; border-color: rgba(11,95,165,.5); }
 .lane-label:focus-visible { outline: 2px solid rgba(98,182,216,.8); outline-offset: 2px; }
+.lane-label-text { display: block; pointer-events: none; }
+.label-transform-handle { position: absolute; z-index: 10; display: none; place-items: center; border: 1px solid #fff; background: #0b5fa5; box-shadow: 0 2px 7px rgba(6,26,51,.28); color: #fff; pointer-events: auto; touch-action: none; }
+.lane-label.is-selected .label-transform-handle { display: grid; }
+.label-transform-handle svg { width: 10px; height: 10px; pointer-events: none; }
+.label-size-handle { right: -9px; bottom: -9px; width: 17px; height: 17px; border-radius: 3px; cursor: nwse-resize; }
+.label-rotate-handle { top: -27px; right: -9px; width: 19px; height: 19px; border-radius: 50%; cursor: grab; }
+.label-rotate-handle:active { cursor: grabbing; }
 .resize-handle {
   position: absolute;
   z-index: 4;
@@ -268,6 +275,11 @@ button { cursor: pointer; }
 .resize-handle.top, .resize-handle.bottom { left: 50%; width: 28px; height: 8px; transform: translateX(-50%); cursor: ns-resize; }
 .resize-handle.top { top: -5px; }
 .resize-handle.bottom { bottom: -5px; }
+.resize-handle.corner { width: 11px; height: 11px; border-radius: 50%; }
+.resize-handle.corner.top-left { top: -6px; left: -6px; cursor: nwse-resize; }
+.resize-handle.corner.top-right { top: -6px; right: -6px; cursor: nesw-resize; }
+.resize-handle.corner.bottom-left { bottom: -6px; left: -6px; cursor: nesw-resize; }
+.resize-handle.corner.bottom-right { right: -6px; bottom: -6px; cursor: nwse-resize; }
 .rotate-handle { position: absolute; top: 8px; right: 8px; z-index: 5; display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid rgba(255,255,255,.9); border-radius: 50%; background: #0b5fa5; box-shadow: 0 2px 6px rgba(6,26,51,.28); color: #fff; opacity: 0; cursor: grab; transition: opacity .14s ease; }
 .rotate-handle svg { width: 12px; height: 12px; pointer-events: none; }
 .crop-shade { position: absolute; z-index: 3; background: rgba(6, 26, 51, .58); pointer-events: none; }
