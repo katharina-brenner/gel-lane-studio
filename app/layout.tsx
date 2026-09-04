@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
-import { DM_Mono, Manrope } from 'next/font/google';
+import { IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
 import './globals.css';
 
-const manrope = Manrope({ variable: '--font-manrope', subsets: ['latin'] });
-const dmMono = DM_Mono({ variable: '--font-dm-mono', subsets: ['latin'], weight: ['400', '500'] });
+const plexSans = IBM_Plex_Sans({ variable: '--font-plex-sans', subsets: ['latin'], weight: ['400', '500', '600', '700'] });
+const plexMono = IBM_Plex_Mono({ variable: '--font-plex-mono', subsets: ['latin'], weight: ['400', '500', '600'] });
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://lane-studio.katharinabrenner.com'),
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${manrope.variable} ${dmMono.variable}`}>{children}</body>
+      <body className={`${plexSans.variable} ${plexMono.variable}`}>{children}</body>
     </html>
   );
 }
