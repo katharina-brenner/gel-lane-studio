@@ -313,7 +313,7 @@ button { cursor: pointer; }
 .format-row { display: flex; align-items: flex-start; gap: 12px; }
 .grow { flex: 1; }
 .toggle-pair { display: flex; gap: 5px; }
-.toggle-pair button { width: 37px; height: 34px; }
+.toggle-pair button { width: 32px; height: 34px; }
 .color-field { width: 141px; }
 .color-control { display: flex; height: 34px; align-items: center; gap: 8px; border: 1px solid var(--input); border-radius: 3px; background: var(--background); padding: 4px 8px 4px 5px; cursor: pointer; }
 .color-control input { width: 25px; height: 23px; padding: 0; overflow: hidden; border: 0; border-radius: 2px; background: transparent; cursor: pointer; }

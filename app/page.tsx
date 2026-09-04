@@ -19,6 +19,7 @@ import {
   ScanLine,
   SlidersHorizontal,
   Trash2,
+  Underline,
   Upload,
 } from 'lucide-react';
 
@@ -52,6 +53,7 @@ type Lane = {
   fontFamily: string;
   bold: boolean;
   italic: boolean;
+  underline: boolean;
   rotation: number;
   labelPosition: LabelPosition;
   labelX: number;
@@ -121,7 +123,7 @@ const INITIAL_LANES: Lane[] = [
   { id: 7, left: 65, width: 8.8, label: 'Treatment 2', color: '#bb2d3b', labelColor: '#9d1f2d', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 69.4, labelY: -7 },
   { id: 8, left: 75, width: 8.8, label: 'Treatment 3', color: '#0b5fa5', labelColor: '#063f73', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 79.4, labelY: -7 },
   { id: 9, left: 85, width: 8.8, label: 'Treatment 4', color: '#0b5fa5', labelColor: '#063f73', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 89.4, labelY: -7 },
-].map((lane): Lane => ({ ...lane, top: 4, height: 92, boxRotation: 0, labelPosition: lane.labelPosition as LabelPosition }));
+].map((lane): Lane => ({ ...lane, top: 4, height: 92, boxRotation: 0, underline: false, labelPosition: lane.labelPosition as LabelPosition }));
 
 const FONT_STACKS: Record<string, string> = {
   Manrope: 'Manrope, Arial, sans-serif',
@@ -152,6 +154,15 @@ function escapeXml(value: string) {
     "'": '&apos;',
     '"': '&quot;',
   }[character] ?? character));
+}
+
+function isEditableTarget(target: EventTarget | null) {
+  return target instanceof HTMLElement && (
+    target.isContentEditable ||
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT'
+  );
 }
 
 function drawDemoGel(canvas: HTMLCanvasElement) {
@@ -211,8 +222,11 @@ export default function Home() {
   const cropDragRef = useRef<CropDragState | null>(null);
   const objectUrlRef = useRef<string | null>(null);
   const nextIdRef = useRef(10);
+  const undoStackRef = useRef<Lane[][]>([]);
+  const redoStackRef = useRef<Lane[][]>([]);
+  const copiedLaneRef = useRef<Lane | null>(null);
 
-  const [lanes, setLanes] = useState<Lane[]>(INITIAL_LANES);
+  const [lanes, setLanesState] = useState<Lane[]>(INITIAL_LANES);
   const [selectedId, setSelectedId] = useState(7);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageSize, setImageSize] = useState({ width: 1200, height: 720 });
@@ -224,6 +238,16 @@ export default function Home() {
 
   const selectedLane = useMemo(() => lanes.find((lane) => lane.id === selectedId) ?? null, [lanes, selectedId]);
 
+  function setLanes(action: Lane[] | ((current: Lane[]) => Lane[])) {
+    setLanesState((current) => {
+      const next = typeof action === 'function' ? action(current) : action;
+      if (next === current) return current;
+      undoStackRef.current = [...undoStackRef.current.slice(-79), current];
+      redoStackRef.current = [];
+      return next;
+    });
+  }
+
   useEffect(() => {
     if (!imageUrl && demoCanvasRef.current) drawDemoGel(demoCanvasRef.current);
   }, [imageUrl]);
@@ -231,6 +255,83 @@ export default function Home() {
   useEffect(() => () => {
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
   }, []);
+
+  useEffect(() => {
+    function handleShortcut(event: KeyboardEvent) {
+      if (event.defaultPrevented) return;
+      const primaryKey = event.metaKey || event.ctrlKey;
+      const key = event.key.toLowerCase();
+      const editable = isEditableTarget(event.target);
+
+      if (!primaryKey) {
+        if (!editable && selectedLane && (event.key === 'Delete' || event.key === 'Backspace')) {
+          event.preventDefault();
+          deleteLane(selectedLane.id);
+        }
+        return;
+      }
+
+      if (editable && !['b', 'i', 'u', 's'].includes(key)) return;
+
+      if (key === 'b' && selectedLane) {
+        event.preventDefault();
+        updateLane(selectedLane.id, { bold: !selectedLane.bold });
+        setStatus(selectedLane.bold ? 'Bold off' : 'Bold on');
+        return;
+      }
+      if (key === 'i' && selectedLane) {
+        event.preventDefault();
+        updateLane(selectedLane.id, { italic: !selectedLane.italic });
+        setStatus(selectedLane.italic ? 'Italic off' : 'Italic on');
+        return;
+      }
+      if (key === 'u' && selectedLane) {
+        event.preventDefault();
+        updateLane(selectedLane.id, { underline: !selectedLane.underline });
+        setStatus(selectedLane.underline ? 'Underline off' : 'Underline on');
+        return;
+      }
+      if (key === 's') {
+        event.preventDefault();
+        exportFile(exportFormat);
+        return;
+      }
+      if ((key === ']' || key === '>') && selectedLane) {
+        event.preventDefault();
+        updateLane(selectedLane.id, { fontSize: clamp(selectedLane.fontSize + 1, 8, 72) });
+        setStatus('Text enlarged');
+        return;
+      }
+      if ((key === '[' || key === '<') && selectedLane) {
+        event.preventDefault();
+        updateLane(selectedLane.id, { fontSize: clamp(selectedLane.fontSize - 1, 8, 72) });
+        setStatus('Text reduced');
+        return;
+      }
+      if (!editable && key === 'c') {
+        event.preventDefault();
+        copySelectedLane();
+        return;
+      }
+      if (!editable && key === 'v') {
+        event.preventDefault();
+        pasteCopiedLane();
+        return;
+      }
+      if (!editable && key === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) redo(); else undo();
+        return;
+      }
+      if (!editable && key === 'y') {
+        event.preventDefault();
+        redo();
+      }
+    }
+
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, [selectedLane, lanes]);
 
   function updateLane(id: number, patch: Partial<Lane>) {
     setLanes((current) => current.map((lane) => lane.id === id ? { ...lane, ...patch } : lane));
@@ -286,6 +387,7 @@ export default function Home() {
         fontFamily: 'Manrope',
         bold: true,
         italic: false,
+        underline: false,
         rotation: safeCount > 7 ? -45 : 0,
         labelPosition: 'top',
         labelX: left + layout.width / 2,
@@ -316,6 +418,7 @@ export default function Home() {
       fontFamily: selectedLane?.fontFamily ?? 'Manrope',
       bold: selectedLane?.bold ?? true,
       italic: selectedLane?.italic ?? false,
+      underline: selectedLane?.underline ?? false,
       rotation: selectedLane?.rotation ?? 0,
       labelPosition: selectedLane?.labelPosition ?? 'top',
       labelX: left + width / 2,
@@ -335,6 +438,61 @@ export default function Home() {
       return next;
     });
     setStatus('Removed');
+  }
+
+  function undo() {
+    const previous = undoStackRef.current.pop();
+    if (!previous) {
+      setStatus('Nothing to undo');
+      return;
+    }
+    redoStackRef.current = [...redoStackRef.current.slice(-79), lanes];
+    setLanesState(previous);
+    setLaneCount(previous.length || 1);
+    if (!previous.some((lane) => lane.id === selectedId)) setSelectedId(previous[0]?.id ?? -1);
+    setStatus('Undo');
+  }
+
+  function redo() {
+    const next = redoStackRef.current.pop();
+    if (!next) {
+      setStatus('Nothing to redo');
+      return;
+    }
+    undoStackRef.current = [...undoStackRef.current.slice(-79), lanes];
+    setLanesState(next);
+    setLaneCount(next.length || 1);
+    if (!next.some((lane) => lane.id === selectedId)) setSelectedId(next[0]?.id ?? -1);
+    setStatus('Redo');
+  }
+
+  function copySelectedLane() {
+    if (!selectedLane) return;
+    copiedLaneRef.current = { ...selectedLane };
+    setStatus('Lane copied');
+  }
+
+  function pasteCopiedLane() {
+    const copied = copiedLaneRef.current;
+    if (!copied) {
+      setStatus('Nothing to paste');
+      return;
+    }
+    const id = nextIdRef.current++;
+    const left = clamp(copied.left + 2, 0, 100 - copied.width);
+    const top = clamp(copied.top + 2, 0, 100 - copied.height);
+    const lane: Lane = {
+      ...copied,
+      id,
+      left,
+      top,
+      labelX: clamp(copied.labelX + left - copied.left, -20, 120),
+      labelY: clamp(copied.labelY + top - copied.top, -20, 120),
+    };
+    setLanes((current) => [...current, lane]);
+    setSelectedId(id);
+    setLaneCount(lanes.length + 1);
+    setStatus('Lane pasted');
   }
 
   function distributeLanes() {
@@ -708,8 +866,8 @@ export default function Home() {
 
   function applyStyleToAll() {
     if (!selectedLane) return;
-    const { color, labelColor, fontSize, fontFamily, bold, italic, rotation } = selectedLane;
-    setLanes((current) => current.map((lane) => ({ ...lane, color, labelColor, fontSize, fontFamily, bold, italic, rotation })));
+    const { color, labelColor, fontSize, fontFamily, bold, italic, underline, rotation } = selectedLane;
+    setLanes((current) => current.map((lane) => ({ ...lane, color, labelColor, fontSize, fontFamily, bold, italic, underline, rotation })));
     setStatus('Style applied');
   }
 
@@ -813,7 +971,7 @@ export default function Home() {
         const padding = 5 * scale;
         const labelX = leftPadding + (lane.labelX / 100) * sourceWidth - cropX;
         const labelY = topPadding + (lane.labelY / 100) * sourceHeight - cropY;
-        return `<g transform="translate(${labelX} ${labelY}) rotate(${lane.rotation})"><rect x="${-textWidth / 2 - padding}" y="${-fontSize * 0.65}" width="${textWidth + padding * 2}" height="${fontSize * 1.25}" fill="#fff" fill-opacity=".92"/><text x="0" y="0" dominant-baseline="middle" text-anchor="middle" fill="${escapeXml(lane.labelColor)}" font-family="${escapeXml(fontFamily)}" font-size="${fontSize}" font-weight="${lane.bold ? 700 : 400}" font-style="${lane.italic ? 'italic' : 'normal'}">${escapeXml(text)}</text></g>`;
+        return `<g transform="translate(${labelX} ${labelY}) rotate(${lane.rotation})"><rect x="${-textWidth / 2 - padding}" y="${-fontSize * 0.65}" width="${textWidth + padding * 2}" height="${fontSize * 1.25}" fill="#fff" fill-opacity=".92"/><text x="0" y="0" dominant-baseline="middle" text-anchor="middle" fill="${escapeXml(lane.labelColor)}" font-family="${escapeXml(fontFamily)}" font-size="${fontSize}" font-weight="${lane.bold ? 700 : 400}" font-style="${lane.italic ? 'italic' : 'normal'}" text-decoration="${lane.underline ? 'underline' : 'none'}">${escapeXml(text)}</text></g>`;
       }).join('');
 
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${outputWidth}" height="${outputHeight}" viewBox="0 0 ${outputWidth} ${outputHeight}"><defs><clipPath id="gel-image"><rect x="${leftPadding}" y="${topPadding}" width="${croppedWidth}" height="${croppedHeight}"/></clipPath></defs><rect width="100%" height="100%" fill="#fff"/><image href="${embeddedImage}" x="${leftPadding}" y="${topPadding}" width="${croppedWidth}" height="${croppedHeight}" preserveAspectRatio="none"/><g clip-path="url(#gel-image)">${boxMarkup}</g>${labelMarkup}</svg>`;
@@ -863,6 +1021,14 @@ export default function Home() {
       context.fillRect(-metrics.width / 2 - padding, -fontSize * 0.65, metrics.width + padding * 2, fontSize * 1.25);
       context.fillStyle = lane.labelColor;
       context.fillText(lane.label || `Lane ${lane.id}`, 0, 0);
+      if (lane.underline) {
+        context.beginPath();
+        context.moveTo(-metrics.width / 2, fontSize * 0.42);
+        context.lineTo(metrics.width / 2, fontSize * 0.42);
+        context.strokeStyle = lane.labelColor;
+        context.lineWidth = Math.max(1, fontSize / 16);
+        context.stroke();
+      }
       context.restore();
     });
 
@@ -1052,6 +1218,7 @@ export default function Home() {
                     fontSize: `${lane.fontSize}px`,
                     fontWeight: lane.bold ? 700 : 400,
                     fontStyle: lane.italic ? 'italic' : 'normal',
+                    textDecoration: lane.underline ? 'underline' : 'none',
                     transform: `translate(-50%, -50%) rotate(${lane.rotation}deg)`,
                   }}
                   tabIndex={0}
@@ -1089,7 +1256,7 @@ export default function Home() {
               </span>
             </div>
           </div>
-          <div className="canvas-help"><span>Label: drag</span><span>Square: text size</span><span>Circle: rotate</span><span>Lane edges/corners: resize</span></div>
+          <div className="canvas-help"><span>⌘/Ctrl+B · I · U</span><span>⌘/Ctrl+C/V</span><span>⌘/Ctrl+Z/Y</span><span>⌘/Ctrl+S export</span><span>Arrows: nudge</span></div>
         </section>
 
         <aside className="inspector-panel">
@@ -1154,6 +1321,7 @@ export default function Home() {
                   <div className="toggle-pair">
                     <Toggle variant="outline" pressed={selectedLane.bold} onPressedChange={(pressed) => updateLane(selectedLane.id, { bold: pressed })} aria-label="Bold"><Bold /></Toggle>
                     <Toggle variant="outline" pressed={selectedLane.italic} onPressedChange={(pressed) => updateLane(selectedLane.id, { italic: pressed })} aria-label="Italic"><Italic /></Toggle>
+                    <Toggle variant="outline" pressed={selectedLane.underline} onPressedChange={(pressed) => updateLane(selectedLane.id, { underline: pressed })} aria-label="Underline"><Underline /></Toggle>
                   </div>
                 </div>
                 <div className="field-group color-field">
