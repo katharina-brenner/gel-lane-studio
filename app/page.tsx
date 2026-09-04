@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlignHorizontalDistributeCenter,
   Bold,
+  Crop,
   Download,
   Equal,
   FlaskConical,
@@ -27,11 +28,21 @@ import { Toggle } from '@/components/ui/toggle';
 type LabelPosition = 'top' | 'inside' | 'bottom';
 type ExportFormat = 'png' | 'jpeg' | 'svg';
 
+type CropState = {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+};
+
 type Lane = {
   id: number;
   label: string;
   left: number;
+  top: number;
   width: number;
+  height: number;
+  boxRotation: number;
   color: string;
   labelColor: string;
   fontSize: number;
@@ -46,12 +57,21 @@ type Lane = {
 
 type DragState = {
   id: number;
-  mode: 'move' | 'resize-left' | 'resize-right';
+  mode: 'move' | 'resize-left' | 'resize-right' | 'resize-top' | 'resize-bottom' | 'rotate';
   startX: number;
+  startY: number;
   startLeft: number;
+  startTop: number;
   startWidth: number;
+  startHeight: number;
   startLabelX: number;
+  startLabelY: number;
+  startRotation: number;
+  centerX: number;
+  centerY: number;
+  startPointerAngle: number;
   stageWidth: number;
+  stageHeight: number;
 };
 
 type LabelDragState = {
@@ -70,6 +90,8 @@ const LABEL_Y: Record<LabelPosition, number> = {
   bottom: 107,
 };
 
+const DEFAULT_CROP: CropState = { top: 0, right: 0, bottom: 0, left: 0 };
+
 const INITIAL_LANES: Lane[] = [
   { id: 1, left: 5, width: 8.8, label: 'Marker', color: '#0b5fa5', labelColor: '#063f73', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 9.4, labelY: -7 },
   { id: 2, left: 15, width: 8.8, label: 'Control', color: '#0b5fa5', labelColor: '#063f73', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 19.4, labelY: -7 },
@@ -80,7 +102,7 @@ const INITIAL_LANES: Lane[] = [
   { id: 7, left: 65, width: 8.8, label: 'Treatment 2', color: '#bb2d3b', labelColor: '#9d1f2d', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 69.4, labelY: -7 },
   { id: 8, left: 75, width: 8.8, label: 'Treatment 3', color: '#0b5fa5', labelColor: '#063f73', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 79.4, labelY: -7 },
   { id: 9, left: 85, width: 8.8, label: 'Treatment 4', color: '#0b5fa5', labelColor: '#063f73', fontSize: 17, fontFamily: 'Manrope', bold: true, italic: false, rotation: -45, labelPosition: 'top', labelX: 89.4, labelY: -7 },
-];
+].map((lane): Lane => ({ ...lane, top: 4, height: 92, boxRotation: 0, labelPosition: lane.labelPosition as LabelPosition }));
 
 const FONT_STACKS: Record<string, string> = {
   Manrope: 'Manrope, Arial, sans-serif',
@@ -178,6 +200,7 @@ export default function Home() {
   const [laneCount, setLaneCount] = useState(9);
   const [status, setStatus] = useState('Demo');
   const [exportFormat, setExportFormat] = useState<ExportFormat>('png');
+  const [crop, setCrop] = useState<CropState>(DEFAULT_CROP);
 
   const selectedLane = useMemo(() => lanes.find((lane) => lane.id === selectedId) ?? null, [lanes, selectedId]);
 
@@ -193,18 +216,50 @@ export default function Home() {
     setLanes((current) => current.map((lane) => lane.id === id ? { ...lane, ...patch } : lane));
   }
 
+  function updateLaneBox(id: number, patch: Partial<Pick<Lane, 'left' | 'top' | 'width' | 'height' | 'boxRotation'>>) {
+    setLanes((current) => current.map((lane) => {
+      if (lane.id !== id) return lane;
+      const next = { ...lane, ...patch };
+      const centerShiftX = next.left + next.width / 2 - (lane.left + lane.width / 2);
+      const centerShiftY = next.top + next.height / 2 - (lane.top + lane.height / 2);
+      return {
+        ...next,
+        labelX: clamp(lane.labelX + centerShiftX, -20, 120),
+        labelY: clamp(lane.labelY + centerShiftY, -20, 120),
+      };
+    }));
+  }
+
+  function getGridLayout(count: number) {
+    const availableWidth = 100 - crop.left - crop.right;
+    const availableHeight = 100 - crop.top - crop.bottom;
+    const horizontalInset = Math.min(4, availableWidth * 0.04);
+    const verticalInset = Math.min(4, availableHeight * 0.04);
+    const usableWidth = Math.max(1, availableWidth - horizontalInset * 2);
+    const gap = count > 1 ? Math.min(1.3, Math.max(0.15, usableWidth / (count * 10))) : 0;
+    const width = Math.max(0.5, (usableWidth - gap * (count - 1)) / count);
+    return {
+      start: crop.left + horizontalInset,
+      top: crop.top + verticalInset,
+      width,
+      height: Math.max(2, availableHeight - verticalInset * 2),
+      gap,
+    };
+  }
+
   function createLaneGrid(count = laneCount) {
     const safeCount = clamp(Math.round(count), 1, 30);
-    const margin = 4;
-    const gap = safeCount > 1 ? Math.min(1.3, 12 / safeCount) : 0;
-    const width = (100 - margin * 2 - gap * (safeCount - 1)) / safeCount;
+    const layout = getGridLayout(safeCount);
     const freshLanes = Array.from({ length: safeCount }, (_, index): Lane => {
-      const left = margin + index * (width + gap);
+      const left = clamp(layout.start + index * (layout.width + layout.gap), crop.left, 100 - crop.right - layout.width);
       return {
         id: nextIdRef.current++,
         label: index === 0 ? 'Marker' : `Lane ${index + 1}`,
         left,
-        width,
+        top: layout.top,
+        width: layout.width,
+        height: layout.height,
+        boxRotation: 0,
         color: '#0b5fa5',
         labelColor: '#063f73',
         fontSize: 17,
@@ -213,7 +268,7 @@ export default function Home() {
         italic: false,
         rotation: safeCount > 7 ? -45 : 0,
         labelPosition: 'top',
-        labelX: left + width / 2,
+        labelX: left + layout.width / 2,
         labelY: LABEL_Y.top,
       };
     });
@@ -231,7 +286,10 @@ export default function Home() {
       id: nextIdRef.current++,
       label: `Lane ${lanes.length + 1}`,
       left,
+      top: selectedLane?.top ?? 4,
       width,
+      height: selectedLane?.height ?? 92,
+      boxRotation: selectedLane?.boxRotation ?? 0,
       color: selectedLane?.color ?? '#0b5fa5',
       labelColor: selectedLane?.labelColor ?? '#063f73',
       fontSize: selectedLane?.fontSize ?? 17,
@@ -286,10 +344,8 @@ export default function Home() {
   function fitLaneGrid() {
     if (!lanes.length) return;
     const sorted = [...lanes].sort((a, b) => a.left - b.left);
-    const margin = 4;
-    const gap = sorted.length > 1 ? Math.min(1.3, 12 / sorted.length) : 0;
-    const width = (100 - margin * 2 - gap * (sorted.length - 1)) / sorted.length;
-    const positions = new Map(sorted.map((lane, index) => [lane.id, margin + index * (width + gap)]));
+    const layout = getGridLayout(sorted.length);
+    const positions = new Map(sorted.map((lane, index) => [lane.id, clamp(layout.start + index * (layout.width + layout.gap), crop.left, 100 - crop.right - layout.width)]));
 
     setLanes((current) => current.map((lane) => {
       const left = positions.get(lane.id) ?? lane.left;
@@ -297,8 +353,11 @@ export default function Home() {
       return {
         ...lane,
         left,
-        width,
-        labelX: clamp(left + width / 2 + labelOffset, -20, 120),
+        top: layout.top,
+        width: layout.width,
+        height: layout.height,
+        boxRotation: 0,
+        labelX: clamp(left + layout.width / 2 + labelOffset, -20, 120),
       };
     }));
     setStatus('Lanes fitted');
@@ -313,6 +372,7 @@ export default function Home() {
     setLanes(INITIAL_LANES);
     setSelectedId(7);
     setLaneCount(9);
+    setCrop(DEFAULT_CROP);
     setStatus('Demo');
   }
 
@@ -326,8 +386,23 @@ export default function Home() {
     const url = URL.createObjectURL(file);
     objectUrlRef.current = url;
     setImageUrl(url);
+    setCrop(DEFAULT_CROP);
     setProjectName(file.name.replace(/\.[^.]+$/, ''));
     setStatus('Image loaded');
+  }
+
+  function updateCrop(side: keyof CropState, value: number) {
+    setCrop((current) => {
+      const opposite: Record<keyof CropState, keyof CropState> = {
+        top: 'bottom',
+        right: 'left',
+        bottom: 'top',
+        left: 'right',
+      };
+      const maximum = 95 - current[opposite[side]];
+      return { ...current, [side]: clamp(Number.isFinite(value) ? value : 0, 0, maximum) };
+    });
+    setStatus('Crop adjusted');
   }
 
   function startDrag(event: React.PointerEvent<HTMLDivElement>, lane: Lane) {
@@ -338,32 +413,105 @@ export default function Home() {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     setSelectedId(lane.id);
-    dragRef.current = { id: lane.id, mode, startX: event.clientX, startLeft: lane.left, startWidth: lane.width, startLabelX: lane.labelX, stageWidth: bounds.width };
+    const centerX = bounds.left + ((lane.left + lane.width / 2) / 100) * bounds.width;
+    const centerY = bounds.top + ((lane.top + lane.height / 2) / 100) * bounds.height;
+    dragRef.current = {
+      id: lane.id,
+      mode,
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: lane.left,
+      startTop: lane.top,
+      startWidth: lane.width,
+      startHeight: lane.height,
+      startLabelX: lane.labelX,
+      startLabelY: lane.labelY,
+      startRotation: lane.boxRotation,
+      centerX,
+      centerY,
+      startPointerAngle: Math.atan2(event.clientY - centerY, event.clientX - centerX) * 180 / Math.PI,
+      stageWidth: bounds.width,
+      stageHeight: bounds.height,
+    };
   }
 
   function moveDrag(event: React.PointerEvent<HTMLDivElement>) {
     const drag = dragRef.current;
     if (!drag || drag.id !== Number(event.currentTarget.dataset.laneId)) return;
-    const delta = ((event.clientX - drag.startX) / drag.stageWidth) * 100;
-    if (drag.mode === 'move') {
-      const left = clamp(drag.startLeft + delta, 0, 100 - drag.startWidth);
-      updateLane(drag.id, { left, labelX: clamp(drag.startLabelX + left - drag.startLeft, -20, 120) });
-    } else if (drag.mode === 'resize-left') {
-      const left = clamp(drag.startLeft + delta, 0, drag.startLeft + drag.startWidth - 1.5);
-      const width = drag.startWidth + drag.startLeft - left;
-      const centerShift = left + width / 2 - (drag.startLeft + drag.startWidth / 2);
-      updateLane(drag.id, { left, width, labelX: clamp(drag.startLabelX + centerShift, -20, 120) });
-    } else {
-      const width = clamp(drag.startWidth + delta, 1.5, 100 - drag.startLeft);
-      updateLane(drag.id, { width, labelX: clamp(drag.startLabelX + (width - drag.startWidth) / 2, -20, 120) });
+    const deltaX = ((event.clientX - drag.startX) / drag.stageWidth) * 100;
+    const deltaY = ((event.clientY - drag.startY) / drag.stageHeight) * 100;
+
+    if (drag.mode === 'rotate') {
+      const pointerAngle = Math.atan2(event.clientY - drag.centerY, event.clientX - drag.centerX) * 180 / Math.PI;
+      const angleDelta = ((pointerAngle - drag.startPointerAngle + 540) % 360) - 180;
+      const rawRotation = clamp(drag.startRotation + angleDelta, -60, 60);
+      updateLane(drag.id, { boxRotation: event.shiftKey ? Math.round(rawRotation / 5) * 5 : Math.round(rawRotation * 10) / 10 });
+      return;
     }
+
+    if (drag.mode === 'move') {
+      const left = clamp(drag.startLeft + deltaX, 0, 100 - drag.startWidth);
+      const top = clamp(drag.startTop + deltaY, 0, 100 - drag.startHeight);
+      updateLane(drag.id, {
+        left,
+        top,
+        labelX: clamp(drag.startLabelX + left - drag.startLeft, -20, 120),
+        labelY: clamp(drag.startLabelY + top - drag.startTop, -20, 120),
+      });
+      return;
+    }
+
+    const radians = drag.startRotation * Math.PI / 180;
+    const cosine = Math.cos(radians);
+    const sine = Math.sin(radians);
+    const deltaXInPixels = event.clientX - drag.startX;
+    const deltaYInPixels = event.clientY - drag.startY;
+    const localDeltaX = deltaXInPixels * cosine + deltaYInPixels * sine;
+    const localDeltaY = -deltaXInPixels * sine + deltaYInPixels * cosine;
+    let width = drag.startWidth;
+    let height = drag.startHeight;
+    let localCenterShiftX = 0;
+    let localCenterShiftY = 0;
+
+    if (drag.mode === 'resize-left') {
+      width = clamp(drag.startWidth - (localDeltaX / drag.stageWidth) * 100, 1.5, 100);
+      localCenterShiftX = ((drag.startWidth - width) / 200) * drag.stageWidth;
+    } else if (drag.mode === 'resize-right') {
+      width = clamp(drag.startWidth + (localDeltaX / drag.stageWidth) * 100, 1.5, 100);
+      localCenterShiftX = ((width - drag.startWidth) / 200) * drag.stageWidth;
+    } else if (drag.mode === 'resize-top') {
+      height = clamp(drag.startHeight - (localDeltaY / drag.stageHeight) * 100, 2, 100);
+      localCenterShiftY = ((drag.startHeight - height) / 200) * drag.stageHeight;
+    } else if (drag.mode === 'resize-bottom') {
+      height = clamp(drag.startHeight + (localDeltaY / drag.stageHeight) * 100, 2, 100);
+      localCenterShiftY = ((height - drag.startHeight) / 200) * drag.stageHeight;
+    }
+
+    const screenShiftX = localCenterShiftX * cosine - localCenterShiftY * sine;
+    const screenShiftY = localCenterShiftX * sine + localCenterShiftY * cosine;
+    const startCenterX = drag.startLeft + drag.startWidth / 2;
+    const startCenterY = drag.startTop + drag.startHeight / 2;
+    const proposedCenterX = startCenterX + (screenShiftX / drag.stageWidth) * 100;
+    const proposedCenterY = startCenterY + (screenShiftY / drag.stageHeight) * 100;
+    const left = clamp(proposedCenterX - width / 2, 0, 100 - width);
+    const top = clamp(proposedCenterY - height / 2, 0, 100 - height);
+    const centerShiftX = left + width / 2 - startCenterX;
+    const centerShiftY = top + height / 2 - startCenterY;
+    updateLane(drag.id, {
+      left,
+      top,
+      width,
+      height,
+      labelX: clamp(drag.startLabelX + centerShiftX, -20, 120),
+      labelY: clamp(drag.startLabelY + centerShiftY, -20, 120),
+    });
   }
 
   function endDrag(event: React.PointerEvent<HTMLDivElement>) {
     if (dragRef.current) {
       event.currentTarget.releasePointerCapture(event.pointerId);
       dragRef.current = null;
-      setStatus('Moved');
+      setStatus('Box adjusted');
     }
   }
 
@@ -405,10 +553,16 @@ export default function Home() {
 
   function nudgeLane(event: React.KeyboardEvent<HTMLDivElement>, lane: Lane) {
     const step = event.shiftKey ? 1 : 0.2;
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    if (event.key.startsWith('Arrow')) {
       event.preventDefault();
-      const left = clamp(lane.left + (event.key === 'ArrowRight' ? step : -step), 0, 100 - lane.width);
-      updateLane(lane.id, { left, labelX: clamp(lane.labelX + left - lane.left, -20, 120) });
+      const left = clamp(lane.left + (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0), 0, 100 - lane.width);
+      const top = clamp(lane.top + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0), 0, 100 - lane.height);
+      updateLane(lane.id, {
+        left,
+        top,
+        labelX: clamp(lane.labelX + left - lane.left, -20, 120),
+        labelY: clamp(lane.labelY + top - lane.top, -20, 120),
+      });
     }
     if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault();
@@ -442,12 +596,18 @@ export default function Home() {
     if (!source) return;
     const sourceWidth = imageUrl ? (uploadedImageRef.current?.naturalWidth || imageSize.width) : 1200;
     const sourceHeight = imageUrl ? (uploadedImageRef.current?.naturalHeight || imageSize.height) : 720;
+    const cropX = Math.round((crop.left / 100) * sourceWidth);
+    const cropY = Math.round((crop.top / 100) * sourceHeight);
+    const cropRight = Math.round((crop.right / 100) * sourceWidth);
+    const cropBottom = Math.round((crop.bottom / 100) * sourceHeight);
+    const croppedWidth = Math.max(1, sourceWidth - cropX - cropRight);
+    const croppedHeight = Math.max(1, sourceHeight - cropY - cropBottom);
     const scale = sourceWidth / 1200;
     const measuringContext = document.createElement('canvas').getContext('2d');
     let minimumLabelX = 0;
-    let maximumLabelX = sourceWidth;
+    let maximumLabelX = croppedWidth;
     let minimumLabelY = 0;
-    let maximumLabelY = sourceHeight;
+    let maximumLabelY = croppedHeight;
 
     lanes.forEach((lane) => {
       if (!measuringContext) return;
@@ -459,8 +619,8 @@ export default function Home() {
       const angle = Math.abs((lane.rotation * Math.PI) / 180);
       const halfWidth = Math.abs(Math.cos(angle)) * textWidth / 2 + Math.abs(Math.sin(angle)) * textHeight / 2;
       const halfHeight = Math.abs(Math.sin(angle)) * textWidth / 2 + Math.abs(Math.cos(angle)) * textHeight / 2;
-      const labelX = (lane.labelX / 100) * sourceWidth;
-      const labelY = (lane.labelY / 100) * sourceHeight;
+      const labelX = (lane.labelX / 100) * sourceWidth - cropX;
+      const labelY = (lane.labelY / 100) * sourceHeight - cropY;
       minimumLabelX = Math.min(minimumLabelX, labelX - halfWidth);
       maximumLabelX = Math.max(maximumLabelX, labelX + halfWidth);
       minimumLabelY = Math.min(minimumLabelY, labelY - halfHeight);
@@ -468,11 +628,11 @@ export default function Home() {
     });
 
     const leftPadding = Math.ceil(Math.max(20 * scale, -minimumLabelX + 12 * scale));
-    const rightPadding = Math.ceil(Math.max(20 * scale, maximumLabelX - sourceWidth + 12 * scale));
+    const rightPadding = Math.ceil(Math.max(20 * scale, maximumLabelX - croppedWidth + 12 * scale));
     const topPadding = Math.ceil(Math.max(28 * scale, -minimumLabelY + 12 * scale));
-    const bottomPadding = Math.ceil(Math.max(28 * scale, maximumLabelY - sourceHeight + 12 * scale));
-    const outputWidth = Math.ceil(sourceWidth + leftPadding + rightPadding);
-    const outputHeight = Math.ceil(sourceHeight + topPadding + bottomPadding);
+    const bottomPadding = Math.ceil(Math.max(28 * scale, maximumLabelY - croppedHeight + 12 * scale));
+    const outputWidth = Math.ceil(croppedWidth + leftPadding + rightPadding);
+    const outputHeight = Math.ceil(croppedHeight + topPadding + bottomPadding);
     const fileBase = (projectName || 'gel').trim().replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'gel';
 
     const download = (blob: Blob, extension: string) => {
@@ -487,30 +647,34 @@ export default function Home() {
 
     if (format === 'svg') {
       const imageCanvas = document.createElement('canvas');
-      imageCanvas.width = sourceWidth;
-      imageCanvas.height = sourceHeight;
+      imageCanvas.width = croppedWidth;
+      imageCanvas.height = croppedHeight;
       const imageContext = imageCanvas.getContext('2d');
       if (!imageContext || !measuringContext) return;
-      imageContext.drawImage(source, 0, 0, sourceWidth, sourceHeight);
+      imageContext.drawImage(source, cropX, cropY, croppedWidth, croppedHeight, 0, 0, croppedWidth, croppedHeight);
       const embeddedImage = imageCanvas.toDataURL('image/png');
 
-      const laneMarkup = lanes.map((lane) => {
-        const x = leftPadding + (lane.left / 100) * sourceWidth;
+      const boxMarkup = lanes.map((lane) => {
         const width = (lane.width / 100) * sourceWidth;
-        const y = topPadding + sourceHeight * 0.04;
-        const height = sourceHeight * 0.92;
+        const height = (lane.height / 100) * sourceHeight;
+        const centerX = leftPadding + ((lane.left + lane.width / 2) / 100) * sourceWidth - cropX;
+        const centerY = topPadding + ((lane.top + lane.height / 2) / 100) * sourceHeight - cropY;
+        return `<g transform="translate(${centerX} ${centerY}) rotate(${lane.boxRotation})"><rect x="${-width / 2}" y="${-height / 2}" width="${width}" height="${height}" fill="${escapeXml(lane.color)}" fill-opacity=".035" stroke="${escapeXml(lane.color)}" stroke-width="${Math.max(2, 2 * scale)}"/></g>`;
+      }).join('');
+
+      const labelMarkup = lanes.map((lane) => {
         const fontSize = lane.fontSize * scale;
         const fontFamily = FONT_STACKS[lane.fontFamily] ?? FONT_STACKS.Manrope;
         const text = lane.label || `Lane ${lane.id}`;
         measuringContext.font = `${lane.italic ? 'italic ' : ''}${lane.bold ? '700 ' : '400 '}${fontSize}px ${fontFamily}`;
         const textWidth = measuringContext.measureText(text).width;
         const padding = 5 * scale;
-        const labelX = leftPadding + (lane.labelX / 100) * sourceWidth;
-        const labelY = topPadding + (lane.labelY / 100) * sourceHeight;
-        return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${escapeXml(lane.color)}" fill-opacity=".035" stroke="${escapeXml(lane.color)}" stroke-width="${Math.max(2, 2 * scale)}"/><g transform="translate(${labelX} ${labelY}) rotate(${lane.rotation})"><rect x="${-textWidth / 2 - padding}" y="${-fontSize * 0.65}" width="${textWidth + padding * 2}" height="${fontSize * 1.25}" fill="#fff" fill-opacity=".92"/><text x="0" y="0" dominant-baseline="middle" text-anchor="middle" fill="${escapeXml(lane.labelColor)}" font-family="${escapeXml(fontFamily)}" font-size="${fontSize}" font-weight="${lane.bold ? 700 : 400}" font-style="${lane.italic ? 'italic' : 'normal'}">${escapeXml(text)}</text></g>`;
+        const labelX = leftPadding + (lane.labelX / 100) * sourceWidth - cropX;
+        const labelY = topPadding + (lane.labelY / 100) * sourceHeight - cropY;
+        return `<g transform="translate(${labelX} ${labelY}) rotate(${lane.rotation})"><rect x="${-textWidth / 2 - padding}" y="${-fontSize * 0.65}" width="${textWidth + padding * 2}" height="${fontSize * 1.25}" fill="#fff" fill-opacity=".92"/><text x="0" y="0" dominant-baseline="middle" text-anchor="middle" fill="${escapeXml(lane.labelColor)}" font-family="${escapeXml(fontFamily)}" font-size="${fontSize}" font-weight="${lane.bold ? 700 : 400}" font-style="${lane.italic ? 'italic' : 'normal'}">${escapeXml(text)}</text></g>`;
       }).join('');
 
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${outputWidth}" height="${outputHeight}" viewBox="0 0 ${outputWidth} ${outputHeight}"><rect width="100%" height="100%" fill="#fff"/><image href="${embeddedImage}" x="${leftPadding}" y="${topPadding}" width="${sourceWidth}" height="${sourceHeight}" preserveAspectRatio="none"/>${laneMarkup}</svg>`;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${outputWidth}" height="${outputHeight}" viewBox="0 0 ${outputWidth} ${outputHeight}"><defs><clipPath id="gel-image"><rect x="${leftPadding}" y="${topPadding}" width="${croppedWidth}" height="${croppedHeight}"/></clipPath></defs><rect width="100%" height="100%" fill="#fff"/><image href="${embeddedImage}" x="${leftPadding}" y="${topPadding}" width="${croppedWidth}" height="${croppedHeight}" preserveAspectRatio="none"/><g clip-path="url(#gel-image)">${boxMarkup}</g>${labelMarkup}</svg>`;
       download(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }), 'svg');
       setStatus('SVG exported');
       return;
@@ -523,18 +687,25 @@ export default function Home() {
     if (!context) return;
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, output.width, output.height);
-    context.drawImage(source, leftPadding, topPadding, sourceWidth, sourceHeight);
+    context.drawImage(source, cropX, cropY, croppedWidth, croppedHeight, leftPadding, topPadding, croppedWidth, croppedHeight);
 
     lanes.forEach((lane) => {
-      const x = leftPadding + (lane.left / 100) * sourceWidth;
       const width = (lane.width / 100) * sourceWidth;
-      const y = topPadding + sourceHeight * 0.04;
-      const height = sourceHeight * 0.92;
+      const height = (lane.height / 100) * sourceHeight;
+      const centerX = leftPadding + ((lane.left + lane.width / 2) / 100) * sourceWidth - cropX;
+      const centerY = topPadding + ((lane.top + lane.height / 2) / 100) * sourceHeight - cropY;
+      context.save();
+      context.beginPath();
+      context.rect(leftPadding, topPadding, croppedWidth, croppedHeight);
+      context.clip();
+      context.translate(centerX, centerY);
+      context.rotate((lane.boxRotation * Math.PI) / 180);
       context.fillStyle = alpha(lane.color, 0.035);
-      context.fillRect(x, y, width, height);
+      context.fillRect(-width / 2, -height / 2, width, height);
       context.strokeStyle = lane.color;
       context.lineWidth = Math.max(2, 2 * scale);
-      context.strokeRect(x, y, width, height);
+      context.strokeRect(-width / 2, -height / 2, width, height);
+      context.restore();
 
       const fontSize = lane.fontSize * scale;
       context.font = `${lane.italic ? 'italic ' : ''}${lane.bold ? '700 ' : '400 '}${fontSize}px ${lane.fontFamily}`;
@@ -542,7 +713,7 @@ export default function Home() {
       context.textBaseline = 'middle';
       context.fillStyle = lane.labelColor;
       context.save();
-      context.translate(leftPadding + (lane.labelX / 100) * sourceWidth, topPadding + (lane.labelY / 100) * sourceHeight);
+      context.translate(leftPadding + (lane.labelX / 100) * sourceWidth - cropX, topPadding + (lane.labelY / 100) * sourceHeight - cropY);
       context.rotate((lane.rotation * Math.PI) / 180);
       const metrics = context.measureText(lane.label || `Lane ${lane.id}`);
       const padding = 5 * scale;
@@ -563,6 +734,10 @@ export default function Home() {
   }
 
   const mediaAspect = `${imageSize.width} / ${imageSize.height}`;
+  const croppedDimensions = {
+    width: Math.max(1, Math.round(imageSize.width * (100 - crop.left - crop.right) / 100)),
+    height: Math.max(1, Math.round(imageSize.height * (100 - crop.top - crop.bottom) / 100)),
+  };
 
   return (
     <main className="app-shell min-h-screen bg-background text-foreground">
@@ -600,6 +775,29 @@ export default function Home() {
             <div className="project-name-row">
               <h1 title={projectName}>{projectName}</h1>
               <span className="lane-count">{lanes.length}</span>
+            </div>
+          </div>
+
+          <div className="crop-block">
+            <div className="crop-heading">
+              <span><Crop /> Image crop (%)</span>
+              <button type="button" onClick={() => { setCrop(DEFAULT_CROP); setStatus('Crop reset'); }}>Reset</button>
+            </div>
+            <div className="crop-grid">
+              {(['top', 'right', 'bottom', 'left'] as const).map((side) => (
+                <label key={side}>
+                  <span>{side}</span>
+                  <Input
+                    aria-label={`Crop ${side}`}
+                    type="number"
+                    min={0}
+                    max={95}
+                    step={0.5}
+                    value={Number(crop[side].toFixed(1))}
+                    onChange={(event) => updateCrop(side, Number(event.target.value))}
+                  />
+                </label>
+              ))}
             </div>
           </div>
 
@@ -643,7 +841,7 @@ export default function Home() {
         <section className="canvas-panel" aria-label="Gel annotation canvas">
           <div className="canvas-meta">
             <div><span className="status-dot" /><span>{status}</span></div>
-            <span className="pixel-badge">{imageSize.width} × {imageSize.height} px</span>
+            <span className="pixel-badge">{croppedDimensions.width} × {croppedDimensions.height} px</span>
           </div>
           <div className="gel-stage">
             <div ref={gelMediaRef} className="gel-media" style={{ aspectRatio: mediaAspect }}>
@@ -664,7 +862,15 @@ export default function Home() {
                   key={lane.id}
                   data-lane-id={lane.id}
                   className={`lane-overlay ${selectedId === lane.id ? 'is-selected' : ''}`}
-                  style={{ left: `${lane.left}%`, width: `${lane.width}%`, borderColor: lane.color, background: alpha(lane.color, 0.035) }}
+                  style={{
+                    left: `${lane.left}%`,
+                    top: `${lane.top}%`,
+                    width: `${lane.width}%`,
+                    height: `${lane.height}%`,
+                    borderColor: lane.color,
+                    background: alpha(lane.color, 0.035),
+                    transform: `rotate(${lane.boxRotation}deg)`,
+                  }}
                   tabIndex={0}
                   role="button"
                   aria-label={`${lane.label || `Lane ${index + 1}`}. Drag to move; use arrow keys to nudge.`}
@@ -677,6 +883,9 @@ export default function Home() {
                 >
                   <span className="resize-handle left" data-mode="resize-left" aria-hidden="true" />
                   <span className="resize-handle right" data-mode="resize-right" aria-hidden="true" />
+                  <span className="resize-handle top" data-mode="resize-top" aria-hidden="true" />
+                  <span className="resize-handle bottom" data-mode="resize-bottom" aria-hidden="true" />
+                  <span className="rotate-handle" data-mode="rotate" aria-hidden="true" />
                 </div>
               ))}
 
@@ -708,9 +917,15 @@ export default function Home() {
                   {lane.label || `Lane ${index + 1}`}
                 </span>
               ))}
+
+              {crop.top > 0 && <span className="crop-shade top" style={{ height: `${crop.top}%` }} />}
+              {crop.bottom > 0 && <span className="crop-shade bottom" style={{ height: `${crop.bottom}%` }} />}
+              {crop.left > 0 && <span className="crop-shade left" style={{ top: `${crop.top}%`, bottom: `${crop.bottom}%`, width: `${crop.left}%` }} />}
+              {crop.right > 0 && <span className="crop-shade right" style={{ top: `${crop.top}%`, bottom: `${crop.bottom}%`, width: `${crop.right}%` }} />}
+              <span className="crop-outline" style={{ top: `${crop.top}%`, right: `${crop.right}%`, bottom: `${crop.bottom}%`, left: `${crop.left}%` }} />
             </div>
           </div>
-          <div className="canvas-help"><span>Lane: drag</span><span>Label: drag</span><span>Handles: resize</span></div>
+          <div className="canvas-help"><span>Box: drag</span><span>Edges: resize</span><span>Circle: rotate</span><span>Label: drag</span></div>
         </section>
 
         <aside className="inspector-panel">
@@ -718,6 +933,25 @@ export default function Home() {
 
           {selectedLane ? (
             <div className="inspector-fields">
+              <div className="geometry-block">
+                <div className="field-label-row"><label>Lane box</label><output>X / Y / W / H %</output></div>
+                <div className="geometry-grid">
+                  <label><span>X</span><Input aria-label="Box horizontal position" type="number" min={0} max={100 - selectedLane.width} step={0.1} value={Number(selectedLane.left.toFixed(1))} onChange={(event) => updateLaneBox(selectedLane.id, { left: clamp(Number(event.target.value), 0, 100 - selectedLane.width) })} /></label>
+                  <label><span>Y</span><Input aria-label="Box vertical position" type="number" min={0} max={100 - selectedLane.height} step={0.1} value={Number(selectedLane.top.toFixed(1))} onChange={(event) => updateLaneBox(selectedLane.id, { top: clamp(Number(event.target.value), 0, 100 - selectedLane.height) })} /></label>
+                  <label><span>W</span><Input aria-label="Box width" type="number" min={1.5} max={100 - selectedLane.left} step={0.1} value={Number(selectedLane.width.toFixed(1))} onChange={(event) => updateLaneBox(selectedLane.id, { width: clamp(Number(event.target.value), 1.5, 100 - selectedLane.left) })} /></label>
+                  <label><span>H</span><Input aria-label="Box height" type="number" min={2} max={100 - selectedLane.top} step={0.1} value={Number(selectedLane.height.toFixed(1))} onChange={(event) => updateLaneBox(selectedLane.id, { height: clamp(Number(event.target.value), 2, 100 - selectedLane.top) })} /></label>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => {
+                  const layout = getGridLayout(Math.max(1, lanes.length));
+                  updateLaneBox(selectedLane.id, { top: layout.top, height: layout.height, boxRotation: 0 });
+                }}>Reset shape</Button>
+              </div>
+
+              <div className="field-group">
+                <div className="field-label-row"><label htmlFor="box-angle">Box angle</label><output>{selectedLane.boxRotation.toFixed(1)}°</output></div>
+                <Slider id="box-angle" min={-60} max={60} step={0.5} value={[selectedLane.boxRotation]} onValueChange={(value) => updateLaneBox(selectedLane.id, { boxRotation: Array.isArray(value) ? Number(value[0]) : Number(value) })} />
+              </div>
+
               <div className="field-group">
                 <label htmlFor="lane-label">Label</label>
                 <Input id="lane-label" value={selectedLane.label} placeholder="Enter a label" onChange={(event) => updateLane(selectedLane.id, { label: event.target.value })} />

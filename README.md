@@ -5,8 +5,9 @@ Lane editor for gel and blot images.
 ## Features
 
 - Local image upload
+- Crop images independently from the top, right, bottom, and left
 - 1–30 lanes
-- Move, resize, distribute
+- Move, resize in both directions, rotate, and distribute lane boxes
 - Auto-fit all lane boxes to an even grid in one click
 - Drag labels freely or enter exact X/Y coordinates
 - Label, font, size, weight, italics, color, angle, position
