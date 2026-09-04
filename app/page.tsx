@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlignHorizontalDistributeCenter,
+  AlignVerticalJustifyCenter,
   Bold,
   Copy,
   Crop,
@@ -350,6 +351,18 @@ export default function Home() {
       return { ...lane, width: nextWidth, labelX: clamp(lane.labelX + (nextWidth - lane.width) / 2, -20, 120) };
     }));
     setStatus('Widths matched');
+  }
+
+  function alignLabels() {
+    if (!lanes.length) return;
+    const reference = selectedLane ?? lanes[0];
+    setLanes((current) => current.map((lane) => ({
+      ...lane,
+      labelPosition: reference.labelPosition,
+      labelX: clamp(lane.left + lane.width / 2, -20, 120),
+      labelY: reference.labelY,
+    })));
+    setStatus('Labels aligned');
   }
 
   function fitLaneGrid() {
@@ -879,6 +892,7 @@ export default function Home() {
             <Button variant="outline" size="sm" onClick={distributeLanes} disabled={lanes.length < 2}><AlignHorizontalDistributeCenter /> Space</Button>
             <Button variant="outline" size="sm" onClick={equalizeWidths} disabled={!lanes.length}><Equal /> Same width</Button>
             <Button variant="outline" size="sm" className="auto-fit-button" onClick={fitLaneGrid} disabled={!lanes.length}><ScanLine /> Auto fit boxes</Button>
+            <Button variant="outline" size="sm" className="align-labels-button" onClick={alignLabels} disabled={lanes.length < 2} title="Align all labels to the selected label"><AlignVerticalJustifyCenter /> Align labels</Button>
           </div>
 
           <div className="lane-list-heading"><span>Lanes</span><span>{lanes.length}</span></div>
